@@ -29,7 +29,36 @@
   <div class="bg-glow bg-glow-1"></div>
   <div class="bg-glow bg-glow-2"></div>
 
-  <header class="app-header">
+  <!-- Login Form Screen Overlay -->
+  <div id="login-screen" class="login-overlay">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="logo-icon">
+          <i data-lucide="landmark"></i>
+        </div>
+        <h2>ReconcileFlow</h2>
+        <p>Sign in to access your reconciliation dashboard</p>
+      </div>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-username">Username</label>
+          <input type="text" id="login-username" required placeholder="Enter username" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" required placeholder="Enter password" autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">
+          <i data-lucide="log-in"></i> Sign In
+        </button>
+      </form>
+      <div class="login-footer">
+        <p>Default Admin: <strong>admin</strong> / <strong>admin123</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <header class="app-header hidden" id="main-header">
     <div class="header-container">
       <div class="logo-area">
         <div class="logo-icon">
@@ -40,69 +69,122 @@
           <p>Daily Bank Discrepancy Reporter</p>
         </div>
       </div>
+
+      <!-- Company Switcher Tabs -->
+      <div class="company-tabs" id="company-tabs-container">
+        <button type="button" class="company-tab active" data-company="ws_hospitality">WS Hospitality</button>
+        <button type="button" class="company-tab" data-company="ws_hotels">WS Hotels</button>
+      </div>
       
       <div class="header-controls">
         <button id="theme-toggle" class="btn-icon" title="Toggle Dark/Light Mode">
           <i data-lucide="sun" class="sun-icon"></i>
           <i data-lucide="moon" class="moon-icon"></i>
         </button>
-        <button id="btn-sample-data" class="btn btn-secondary">
-          <i data-lucide="table-properties"></i>
-          Load Weekend Example
-        </button>
+        <div class="user-badge-area">
+          <span class="user-name-badge" id="user-display-name">Username (Admin)</span>
+          <button id="btn-logout" class="btn-icon" title="Log Out">
+            <i data-lucide="log-out"></i>
+          </button>
+        </div>
       </div>
     </div>
   </header>
 
-  <main class="app-container">
+  <main class="app-container hidden" id="main-container">
     
-    <!-- Top Summary Row -->
-    <section class="summary-cards">
-      <div class="card summary-card" id="card-ledger">
-        <div class="card-icon" style="--icon-color: var(--accent-blue);">
-          <i data-lucide="book-open"></i>
-        </div>
-        <div class="card-info">
-          <span>Ledger Total (CB)</span>
-          <h2 id="total-ledger-display">$0.00</h2>
-        </div>
+    <!-- Primary Sub-Tabs and Settings Row -->
+    <div class="workspace-tabs-row">
+      <div class="sub-tabs" id="sub-tabs-container">
+        <button type="button" class="sub-tab active" data-tab="cards">
+          <i data-lucide="credit-card"></i> Cards Reconciliation
+        </button>
+        <button type="button" class="sub-tab" data-tab="amex">
+          <i data-lucide="shield-check"></i> AMEX Reconciliation
+        </button>
       </div>
       
-      <div class="card summary-card" id="card-bank">
-        <div class="card-icon" style="--icon-color: var(--accent-purple);">
-          <i data-lucide="wallet"></i>
+      <div class="workspace-actions">
+        <button id="btn-sample-data" class="btn btn-secondary btn-sm">
+          <i data-lucide="table-properties"></i> Load Weekend Example
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm admin-only" id="btn-settings-toggle">
+          <i data-lucide="settings"></i> User Management
+        </button>
+      </div>
+    </div>
+
+    <!-- Administrative Settings View (Toggled Panel) -->
+    <section id="settings-view" class="card settings-card hidden">
+      <div class="card-header-flex">
+        <div class="card-header-title-area">
+          <h3 class="card-title"><i data-lucide="users"></i> User Directory Management</h3>
+          <p class="card-subtitle">Add or remove system users and assign roles</p>
         </div>
-        <div class="card-info">
-          <span>Bank Statement Total</span>
-          <h2 id="total-bank-display">$0.00</h2>
-        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-close-settings">
+          <i data-lucide="x"></i> Close Panel
+        </button>
       </div>
       
-      <div class="card summary-card" id="card-discrepancy">
-        <div class="card-icon" id="discrepancy-icon-container" style="--icon-color: var(--accent-green);">
-          <i data-lucide="check-circle-2" id="discrepancy-icon"></i>
+      <div class="settings-grid">
+        <!-- User list directory -->
+        <div class="user-list-area">
+          <div class="table-container">
+            <table class="settings-table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Role</th>
+                  <th class="actions-col">Action</th>
+                </tr>
+              </thead>
+              <tbody id="users-tbody">
+                <!-- User rows injected by JS -->
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div class="card-info">
-          <span>Net Discrepancy</span>
-          <h2 id="net-discrepancy-display">$0.00</h2>
+        
+        <!-- Add user account form -->
+        <div class="add-user-area">
+          <h4 class="settings-section-title"><i data-lucide="user-plus"></i> Create User Account</h4>
+          <form id="add-user-form">
+            <div class="form-group">
+              <label for="new-username">Username</label>
+              <input type="text" id="new-username" required placeholder="e.g. accountant1">
+            </div>
+            <div class="form-group">
+              <label for="new-password">Password</label>
+              <input type="password" id="new-password" required placeholder="Minimum 4 characters">
+            </div>
+            <div class="form-group">
+              <label for="new-role">System Role</label>
+              <select id="new-role" class="filter-select" style="width: 100%;">
+                <option value="user">Standard User (Data entry & reports)</option>
+                <option value="admin">Administrator (Full Access)</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top: 10px; width: 100%;">
+              <i data-lucide="user-plus"></i> Create User
+            </button>
+          </form>
         </div>
       </div>
     </section>
 
-    <!-- Main Workspace Split -->
-    <div class="workspace-grid">
+    <!-- Main Workspace Dashboard Grid (Reconciliations) -->
+    <div class="workspace-grid" id="dashboard-view">
       
       <!-- Left Column: Inputs Form -->
       <section class="form-section">
         <form id="reconcile-form">
           
-
           <!-- Section: Dynamic Trial Balance (CB Ledger) -->
           <div class="card inputs-card tb-card">
             <div class="card-header-flex">
               <div class="card-header-title-area">
                 <h3 class="card-title"><i data-lucide="receipt"></i> Hotel Trial Balance (Col C)</h3>
-                <p class="card-subtitle">Add columns for weekends or holidays that deposit in a single batch</p>
+                <p class="card-subtitle" id="tb-badge-title">CB Ledger Receipts</p>
               </div>
               <div class="card-actions">
                 <button type="button" class="btn btn-sm btn-secondary" id="btn-add-tb-col">
@@ -112,20 +194,12 @@
             </div>
             
             <div class="spreadsheet-container">
-              <!-- Sticky Labels Column on Left -->
-              <div class="spreadsheet-labels">
-                <div class="sheet-label-cell header-cell">TB Date</div>
-                <div class="sheet-label-cell">Visa</div>
-                <div class="sheet-label-cell">MasterCard (MC)</div>
-                <div class="sheet-label-cell">Discover</div>
-                <div class="sheet-label-cell">Debit 1</div>
-                <div class="sheet-label-cell">Debit 2</div>
-                <div class="sheet-label-cell">Visa POS</div>
-                <div class="sheet-label-cell">MC POS</div>
-                <div class="sheet-label-cell">Diner</div>
+              <!-- Sticky Labels Column on Left (Dynamic) -->
+              <div id="tb-labels-container" class="spreadsheet-labels">
+                <!-- Injected dynamically by JS -->
               </div>
               
-              <!-- Scrolling Columns Container -->
+              <!-- Scrolling Columns Container (Dynamic) -->
               <div class="spreadsheet-scroll-area">
                 <div id="tb-columns-container" class="spreadsheet-columns-container">
                   <!-- Dynamic columns of inputs injected here by JS -->
@@ -134,57 +208,15 @@
             </div>
           </div>
 
-          <!-- Section: Bank Statement Amounts -->
+          <!-- Section: Bank Statement Amounts (Dynamic) -->
           <div class="card inputs-card bank-card">
             <div class="card-header-flex">
               <h3 class="card-title"><i data-lucide="building-2"></i> Bank Statement (Col I)</h3>
-              <span class="badge badge-purple">Bank Settled</span>
+              <span class="badge badge-purple" id="bank-badge-title">Bank Settled</span>
             </div>
             
-            <div class="bank-inputs-list">
-              <div class="bank-input-row">
-                <label for="bank-date">Bank Date</label>
-                <input type="date" id="bank-date" required>
-              </div>
-              <div class="bank-input-row">
-                <label for="bank-visa">Visa Settled</label>
-                <div class="input-prefix">
-                  <span>$</span>
-                  <input type="number" id="bank-visa" step="0.01" placeholder="0.00">
-                </div>
-              </div>
-              
-              <div class="bank-input-row">
-                <label for="bank-mc">MasterCard (MC) Settled</label>
-                <div class="input-prefix">
-                  <span>$</span>
-                  <input type="number" id="bank-mc" step="0.01" placeholder="0.00">
-                </div>
-              </div>
-
-              <div class="bank-input-row">
-                <label for="bank-discover">Discover Settled</label>
-                <div class="input-prefix">
-                  <span>$</span>
-                  <input type="number" id="bank-discover" step="0.01" placeholder="0.00">
-                </div>
-              </div>
-
-              <div class="bank-input-row">
-                <label for="bank-debit1">Debit 1 Settled</label>
-                <div class="input-prefix">
-                  <span>$</span>
-                  <input type="number" id="bank-debit1" step="0.01" placeholder="0.00">
-                </div>
-              </div>
-
-              <div class="bank-input-row">
-                <label for="bank-debit2">Debit 2 Settled</label>
-                <div class="input-prefix">
-                  <span>$</span>
-                  <input type="number" id="bank-debit2" step="0.01" placeholder="0.00">
-                </div>
-              </div>
+            <div id="bank-inputs-container" class="bank-inputs-list">
+              <!-- Injected dynamically by JS -->
             </div>
           </div>
           
@@ -245,8 +277,41 @@
       </section>
     </div>
 
+    <!-- Live Totals Summary Cards (Always Visible at Bottom of Dashboard) -->
+    <section class="summary-cards" id="dashboard-summary-cards">
+      <div class="card summary-card" id="card-ledger">
+        <div class="card-icon" style="--icon-color: var(--accent-blue);">
+          <i data-lucide="book-open"></i>
+        </div>
+        <div class="card-info">
+          <span>Ledger Total (CB)</span>
+          <h2 id="total-ledger-display">$0.00</h2>
+        </div>
+      </div>
+      
+      <div class="card summary-card" id="card-bank">
+        <div class="card-icon" style="--icon-color: var(--accent-purple);">
+          <i data-lucide="wallet"></i>
+        </div>
+        <div class="card-info">
+          <span>Bank Statement Total</span>
+          <h2 id="total-bank-display">$0.00</h2>
+        </div>
+      </div>
+      
+      <div class="card summary-card" id="card-discrepancy">
+        <div class="card-icon" id="discrepancy-icon-container" style="--icon-color: var(--accent-green);">
+          <i data-lucide="check-circle-2" id="discrepancy-icon"></i>
+        </div>
+        <div class="card-info">
+          <span>Net Discrepancy</span>
+          <h2 id="net-discrepancy-display">$0.00</h2>
+        </div>
+      </div>
+    </section>
+
     <!-- Bottom Section: Saved History Log -->
-    <section class="card history-card">
+    <section class="card history-card" id="history-view">
       <div class="card-header-flex history-header">
         <div class="history-title-area">
           <h3 class="card-title"><i data-lucide="history"></i> Reconciliation History</h3>
@@ -303,7 +368,7 @@
 
   </main>
 
-  <footer class="app-footer">
+  <footer class="app-footer hidden" id="main-footer">
     <div class="footer-content">
       <p>&copy; 2026 ReconcileFlow. Designed for Bank & Ledger Reconciliation.</p>
     </div>

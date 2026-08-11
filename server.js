@@ -1,6 +1,6 @@
 /**
- * ReconcileFlow - Backend Server
- * Custom Express server with JSON file database persistence.
+ * ReconcileFlow - Backend Server (Enhanced)
+ * Supports User Authentication, User Directory Admin, Multi-Company, and segmented reports.
  */
 const express = require('express');
 const fs = require('fs');
@@ -8,97 +8,187 @@ const path = require('path');
 
 const app = express();
 const PORT = 3000;
-const DATA_FILE = path.join(__dirname, 'data', 'history.json');
 
-// Ensure data folder and file exist
-const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir);
+// Database Files
+const DATA_DIR = path.join(__dirname, 'data');
+const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+// Ensure database folders and files exist
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR);
 }
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify([]), 'utf8');
+if (!fs.existsSync(HISTORY_FILE)) {
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify([]), 'utf8');
+}
+if (!fs.existsSync(USERS_FILE)) {
+  // Create default admin account
+  const defaultAdmin = [{ username: 'admin', password: 'admin123', role: 'admin' }];
+  fs.writeFileSync(USERS_FILE, JSON.stringify(defaultAdmin, null, 2), 'utf8');
 }
 
 // Middleware
 app.use(express.json());
-app.use(express.static(__dirname)); // Serve static files (index.html, styles.css, app.js)
+app.use(express.static(__dirname));
 
-// Helpers to read/write JSON database
-function readData() {
+// --- FILE DB HELPERS ---
+
+function readJSON(filePath) {
   try {
-    const raw = fs.readFileSync(DATA_FILE, 'utf8');
+    const raw = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(raw);
   } catch (err) {
-    console.error("Error reading database file: ", err);
+    console.error(`Error reading file ${filePath}: `, err);
     return [];
   }
 }
 
-function writeData(data) {
+function writeJSON(filePath, data) {
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
     return true;
   } catch (err) {
-    console.error("Error writing to database file: ", err);
+    console.error(`Error writing file ${filePath}: `, err);
     return false;
   }
 }
 
-// --- API ENDPOINTS ---
+// --- AUTH & USER MANAGEMENT APIs ---
 
-// Get all reconciliation reports
-app.get('/api/history', (req, res) => {
-  const history = readData();
-  res.json(history);
-});
-
-// Save or Update a report
-app.post('/api/history', (req, res) => {
-  const report = req.body;
-  if (!report || !report.id) {
-    return res.status(400).json({ error: 'Invalid report data' });
+// Login Endpoint
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
   }
 
-  const history = readData();
+  const users = readJSON(USERS_FILE);
+  const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
+
+  if (user) {
+    res.json({
+      message: 'Login successful!',
+      user: {
+        username: user.username,
+        role: user.role
+      }
+    });
+  } else {
+    res.status(401).json({ error: 'Invalid username or password' });
+  }
+});
+
+// Get all users (Admin only)
+app.get('/api/users', (req, res) => {
+  const users = readJSON(USERS_FILE).map(u => ({ username: u.username, role: u.role }));
+  res.json(users);
+});
+
+// Add new user (Admin only)
+app.post('/api/users', (req, res) => {
+  const { username, password, role } = req.body;
+  if (!username || !password || !role) {
+    return res.status(400).json({ error: 'Username, password, and role are required' });
+  }
+
+  const users = readJSON(USERS_FILE);
+  const exists = users.some(u => u.username.toLowerCase() === username.toLowerCase());
+
+  if (exists) {
+    return res.status(400).json({ error: 'Username already exists' });
+  }
+
+  users.push({ username, password, role });
+  if (writeJSON(USERS_FILE, users)) {
+    res.json({ message: `User account '${username}' created successfully!` });
+  } else {
+    res.status(500).json({ error: 'Failed to write user database to disk' });
+  }
+});
+
+// Delete user (Admin only)
+app.delete('/api/users/:username', (req, res) => {
+  const { username } = req.params;
+  const users = readJSON(USERS_FILE);
+
+  if (username.toLowerCase() === 'admin') {
+    return res.status(400).json({ error: 'Cannot delete the default administrator account' });
+  }
+
+  const filtered = users.filter(u => u.username.toLowerCase() !== username.toLowerCase());
+  if (users.length === filtered.length) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  if (writeJSON(USERS_FILE, filtered)) {
+    res.json({ message: `User account '${username}' deleted successfully!` });
+  } else {
+    res.status(500).json({ error: 'Failed to update user database on disk' });
+  }
+});
+
+// --- SEGMENTED RECONCILIATION APIs ---
+
+// Get history filtered by companyId and reconType
+app.get('/api/history', (req, res) => {
+  const { companyId, reconType } = req.query;
+  if (!companyId || !reconType) {
+    return res.status(400).json({ error: 'companyId and reconType are required parameters' });
+  }
+
+  const history = readJSON(HISTORY_FILE);
+  // Filter only items matching company and type
+  const filtered = history.filter(r => r.companyId === companyId && r.reconType === reconType);
+  res.json(filtered);
+});
+
+// Save or update a segmented report
+app.post('/api/history', (req, res) => {
+  const report = req.body;
+  if (!report || !report.id || !report.companyId || !report.reconType) {
+    return res.status(400).json({ error: 'Invalid report payload (missing id, companyId, or reconType)' });
+  }
+
+  const history = readJSON(HISTORY_FILE);
   const index = history.findIndex(r => r.id === report.id);
 
   if (index !== -1) {
-    // Update existing
+    // Update existing report
     history[index] = report;
   } else {
-    // Insert new
+    // Save new report
     history.push(report);
   }
 
-  // Sort history by Bank Date
+  // Sort history chronologically by bankDate
   history.sort((a, b) => new Date(a.bankDate) - new Date(b.bankDate));
 
-  if (writeData(history)) {
-    res.json({ message: 'Report saved successfully!', report });
+  if (writeJSON(HISTORY_FILE, history)) {
+    res.json({ message: 'Report saved to server database!', report });
   } else {
-    res.status(500).json({ error: 'Failed to write data to server disk' });
+    res.status(500).json({ error: 'Failed to write history database to disk' });
   }
 });
 
 // Delete a report
 app.delete('/api/history/:id', (req, res) => {
   const { id } = req.params;
-  const history = readData();
+  const history = readJSON(HISTORY_FILE);
   const filtered = history.filter(r => r.id !== id);
 
-  if (writeData(filtered)) {
-    res.json({ message: `Report ${id} deleted successfully!` });
+  if (writeJSON(HISTORY_FILE, filtered)) {
+    res.json({ message: `Report deleted successfully!` });
   } else {
-    res.status(500).json({ error: 'Failed to delete report from server disk' });
+    res.status(500).json({ error: 'Failed to update history database on disk' });
   }
 });
 
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`====================================================`);
-  console.log(` ReconcileFlow Server is running!`);
+  console.log(` ReconcileFlow Multi-Company Server is running!`);
   console.log(` Local Access:     http://localhost:${PORT}`);
   console.log(` Network Access:   http://10.0.0.180:${PORT}`);
-  console.log(` Database Path:    ${DATA_FILE}`);
+  console.log(` Database Directory: ${DATA_DIR}`);
   console.log(`====================================================`);
 });
