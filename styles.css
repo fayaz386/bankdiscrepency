@@ -1542,3 +1542,113 @@ body.light-theme .cat-header-spacer {
   width: 10px;
   height: 10px;
 }
+
+/* Active Company indicator banner under sub-tabs */
+.active-company-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--border-radius-md);
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  width: fit-content;
+}
+.active-company-indicator strong {
+  color: var(--text-primary);
+}
+
+/* Compact Bank Statement entries */
+.bank-cat-block {
+  padding-bottom: 6px !important;
+  margin-bottom: 6px !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+.bank-cat-block:last-child {
+  border-bottom: none !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+.bank-cat-block div[style*="margin-bottom: 8px"] {
+  margin-bottom: 4px !important;
+}
+.bank-input-row {
+  margin-bottom: 4px !important;
+}
+.bank-input-row input {
+  height: 24px !important;
+  padding: 2px 4px 2px 14px !important;
+  font-size: 0.8rem !important;
+}
+.bank-input-row label {
+  font-size: 0.75rem !important;
+}
+.bank-input-row .input-prefix span {
+  left: 5px !important;
+  font-size: 0.7rem !important;
+}
+
+/* Live Status Board layout */
+.live-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.status-board-card {
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: var(--transition-fast);
+}
+body.light-theme .status-board-card {
+  background-color: rgba(0, 0, 0, 0.01);
+}
+.status-board-card:hover {
+  border-color: var(--accent-blue);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+}
+.status-board-card.discrepant-card {
+  border-left: 4px solid var(--accent-red);
+}
+.status-board-card.reconciled-card {
+  border-left: 4px solid var(--accent-green);
+}
+.status-board-card-title {
+  font-family: var(--font-header);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.status-board-card-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.status-board-card-metrics div {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+}
+.status-board-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  margin-top: 8px;
+  border-top: 1px dotted var(--border-color);
+  padding-top: 6px;
+}

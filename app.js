@@ -46,7 +46,7 @@ function getInitialCategories() {
 // --- APP STATE ---
 let currentUser = null;
 let activeCompany = 'ws_hospitality';
-let activeTab = 'cards';
+let activeTab = 'live';
 
 // Separate Grid States
 let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa_0: '', mc_0: ''... } }]
@@ -202,6 +202,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  const btnRefreshStatus = document.getElementById('btn-refresh-status');
+  if (btnRefreshStatus) {
+    btnRefreshStatus.addEventListener('click', loadLiveStatusBoard);
+  }
+
   // Check auth session on startup
   checkSession();
   
@@ -296,6 +301,9 @@ function showAuthenticatedUI() {
   mainContainer.classList.remove('hidden');
   mainFooter.classList.remove('hidden');
   
+  // Explicitly close settings on refresh/startup
+  toggleSettingsView(false);
+
   const roleLabel = currentUser.role === 'admin' ? 'Admin' : 'User';
   userDisplayName.textContent = `${currentUser.username} (${roleLabel})`;
   
@@ -305,11 +313,16 @@ function showAuthenticatedUI() {
   } else {
     btnSettingsToggle.style.display = 'none';
     btnSettingsToggle.classList.add('hidden');
-    toggleSettingsView(false);
   }
   
-  resetAppInputs();
-  loadDataFromServer();
+  // Initialize view states
+  if (activeTab === 'live') {
+    toggleWorkspaceView('live');
+  } else {
+    toggleWorkspaceView('workspace');
+    resetAppInputs();
+    loadDataFromServer();
+  }
 }
 
 function toggleSettingsView(forceOpen) {
@@ -459,8 +472,19 @@ function setupNavigationTabs() {
       activeCompany = btn.getAttribute('data-company');
       
       toggleSettingsView(false);
-      resetAppInputs();
-      loadDataFromServer();
+      
+      // Update active company indicator text
+      const compName = activeCompany === 'ws_hospitality' ? 'WS Hospitality' : 'WS Hotels';
+      const companyIndicator = document.getElementById('active-company-indicator');
+      if (companyIndicator) {
+        companyIndicator.innerHTML = `<i data-lucide="building"></i> Active Workspace: <strong>${compName}</strong>`;
+      }
+      lucide.createIcons();
+
+      if (activeTab !== 'live') {
+        resetAppInputs();
+        loadDataFromServer();
+      }
       showToast(`Switched workspace to ${btn.textContent}`, 'info');
     });
   });
@@ -473,8 +497,14 @@ function setupNavigationTabs() {
       activeTab = btn.getAttribute('data-tab');
 
       toggleSettingsView(false);
-      resetAppInputs();
-      loadDataFromServer();
+
+      if (activeTab === 'live') {
+        toggleWorkspaceView('live');
+      } else {
+        toggleWorkspaceView('workspace');
+        resetAppInputs();
+        loadDataFromServer();
+      }
     });
   });
 }
@@ -1918,3 +1948,157 @@ function copySummaryToClipboard() {
     .then(() => showToast('Summary copied to clipboard!', 'success'))
     .catch(() => showToast('Failed to copy summary to clipboard.', 'error'));
 }
+
+// --- LIVE DASHBOARD VIEW CONTROLLERS ---
+
+function toggleWorkspaceView(mode) {
+  const liveSection = document.getElementById('live-dashboard-section');
+  const dashboardView = document.getElementById('dashboard-view');
+  const summaryCards = document.getElementById('dashboard-summary-cards');
+  const historyView = document.getElementById('history-view');
+  const companyIndicator = document.getElementById('active-company-indicator');
+
+  if (mode === 'live') {
+    if (liveSection) {
+      liveSection.style.display = '';
+      liveSection.classList.remove('hidden');
+    }
+    
+    if (dashboardView) {
+      dashboardView.style.display = 'none';
+      dashboardView.classList.add('hidden');
+    }
+    
+    if (summaryCards) {
+      summaryCards.style.display = 'none';
+      summaryCards.classList.add('hidden');
+    }
+    
+    if (historyView) {
+      historyView.style.display = 'none';
+      historyView.classList.add('hidden');
+    }
+
+    if (companyIndicator) {
+      companyIndicator.style.display = 'none';
+      companyIndicator.classList.add('hidden');
+    }
+    
+    if (companyTabsContainer) {
+      companyTabsContainer.style.display = 'none';
+      companyTabsContainer.classList.add('hidden');
+    }
+
+    loadLiveStatusBoard();
+  } else {
+    if (liveSection) {
+      liveSection.style.display = 'none';
+      liveSection.classList.add('hidden');
+    }
+    
+    if (dashboardView) {
+      dashboardView.style.display = '';
+      dashboardView.classList.remove('hidden');
+    }
+    
+    if (summaryCards) {
+      summaryCards.style.display = '';
+      summaryCards.classList.remove('hidden');
+    }
+    
+    if (historyView) {
+      historyView.style.display = '';
+      historyView.classList.remove('hidden');
+    }
+
+    if (companyIndicator) {
+      companyIndicator.style.display = '';
+      companyIndicator.classList.remove('hidden');
+      
+      const compName = activeCompany === 'ws_hospitality' ? 'WS Hospitality' : 'WS Hotels';
+      companyIndicator.innerHTML = `<i data-lucide="building"></i> Active Workspace: <strong>${compName}</strong>`;
+    }
+    
+    if (companyTabsContainer) {
+      companyTabsContainer.style.display = '';
+      companyTabsContainer.classList.remove('hidden');
+    }
+
+    lucide.createIcons();
+  }
+}
+
+window.loadLiveStatusBoard = function() {
+  const container = document.getElementById('live-status-grid-container');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="empty-state">
+      <i data-lucide="loader-2" class="empty-icon" style="animation: spin 1.5s linear infinite;"></i>
+      <p>Loading status board...</p>
+    </div>
+  `;
+  lucide.createIcons();
+
+  fetch('/api/latest-status')
+    .then(res => res.json())
+    .then(data => {
+      container.innerHTML = '';
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No reports found in system.</p></div>';
+        return;
+      }
+
+      data.forEach(item => {
+        const card = document.createElement('div');
+        let cardClass = 'status-board-card';
+        let statusBadge = '';
+        let metricsHtml = '';
+
+        if (item.hasReport) {
+          const isBalanced = Math.abs(item.netDiscrepancy) <= 0.005;
+          cardClass += isBalanced ? ' reconciled-card' : ' discrepant-card';
+          statusBadge = isBalanced 
+            ? '<span class="status-pill status-reconciled" style="padding: 2px 8px; font-size: 0.7rem;"><i data-lucide="check" style="width: 10px; height: 10px;"></i> Balanced</span>'
+            : '<span class="status-pill status-discrepant" style="padding: 2px 8px; font-size: 0.7rem;"><i data-lucide="alert-triangle" style="width: 10px; height: 10px;"></i> Out of Balance</span>';
+          
+          const diffClass = item.netDiscrepancy > 0.005 ? 'val-positive' : (item.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
+          
+          metricsHtml = `
+            <div class="status-board-card-metrics">
+              <div><span>TB Period:</span> <span>${item.tbDateLabel}</span></div>
+              <div><span>Bank Date:</span> <span>${item.bankDate}</span></div>
+              <div><span>Ledger Total:</span> <span>${formatCurrency(item.totalLedger)}</span></div>
+              <div><span>Bank Total:</span> <span>${formatCurrency(item.totalBank)}</span></div>
+              <div style="font-weight: bold; border-top: 1px solid var(--border-color); padding-top: 4px; margin-top: 4px;">
+                <span>Discrepancy:</span> <span class="${diffClass}">${item.netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(item.netDiscrepancy)}</span>
+              </div>
+            </div>
+          `;
+        } else {
+          statusBadge = '<span class="status-pill status-discrepant" style="background-color: rgba(245,158,11,0.1); color: var(--accent-yellow); border-color: rgba(245,158,11,0.2); padding: 2px 8px; font-size: 0.7rem;"><i data-lucide="help-circle" style="width: 10px; height: 10px;"></i> No Data</span>';
+          metricsHtml = `
+            <p style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; margin: 10px 0;">No reconciliation reports have been saved for this workspace yet.</p>
+          `;
+        }
+
+        const dateStr = item.hasReport ? new Date(item.timestamp).toLocaleDateString() : 'N/A';
+
+        card.className = cardClass;
+        card.innerHTML = `
+          <div class="status-board-card-title">${item.title}</div>
+          ${metricsHtml}
+          <div class="status-board-card-footer">
+            ${statusBadge}
+            <span style="color: var(--text-muted); font-size: 0.7rem;">Saved: ${dateStr}</span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+      lucide.createIcons();
+    })
+    .catch(err => {
+      console.error(err);
+      container.innerHTML = '<div class="empty-state"><p class="val-negative">Error loading status board details.</p></div>';
+    });
+};

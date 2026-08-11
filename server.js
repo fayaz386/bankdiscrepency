@@ -165,6 +165,45 @@ app.get('/api/history', (req, res) => {
   res.json(filtered);
 });
 
+// Get latest status for both companies and recon categories
+app.get('/api/latest-status', (req, res) => {
+  const history = readJSON(HISTORY_FILE);
+  const combos = [
+    { companyId: 'ws_hospitality', reconType: 'cards', title: 'WS Hospitality - Cards' },
+    { companyId: 'ws_hospitality', reconType: 'amex', title: 'WS Hospitality - AMEX' },
+    { companyId: 'ws_hotels', reconType: 'cards', title: 'WS Hotels - Cards' },
+    { companyId: 'ws_hotels', reconType: 'amex', title: 'WS Hotels - AMEX' }
+  ];
+  
+  const result = combos.map(c => {
+    const matches = history.filter(r => r.companyId === c.companyId && r.reconType === c.reconType);
+    matches.sort((a, b) => b.timestamp - a.timestamp); // latest first
+    if (matches.length > 0) {
+      const r = matches[0];
+      return {
+        companyId: c.companyId,
+        reconType: c.reconType,
+        title: c.title,
+        hasReport: true,
+        bankDate: r.bankDate,
+        tbDateLabel: r.tbDateLabel,
+        totalLedger: r.totalLedger,
+        totalBank: r.totalBank,
+        netDiscrepancy: r.netDiscrepancy,
+        timestamp: r.timestamp
+      };
+    } else {
+      return {
+        companyId: c.companyId,
+        reconType: c.reconType,
+        title: c.title,
+        hasReport: false
+      };
+    }
+  });
+  res.json(result);
+});
+
 // Save or update a segmented report
 app.post('/api/history', (req, res) => {
   const report = req.body;

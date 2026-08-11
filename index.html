@@ -91,9 +91,12 @@
   <main class="app-container hidden" id="main-container">
     
     <!-- Primary Sub-Tabs and Settings Row -->
-    <div class="workspace-tabs-row">
+    <div class="workspace-tabs-row" style="margin-bottom: 0.5rem;">
       <div class="sub-tabs" id="sub-tabs-container">
-        <button type="button" class="sub-tab active" data-tab="cards">
+        <button type="button" class="sub-tab active" data-tab="live">
+          <i data-lucide="activity"></i> LIVE
+        </button>
+        <button type="button" class="sub-tab" data-tab="cards">
           <i data-lucide="credit-card"></i> Cards Reconciliation
         </button>
         <button type="button" class="sub-tab" data-tab="amex">
@@ -106,6 +109,11 @@
           <i data-lucide="settings"></i> User Management
         </button>
       </div>
+    </div>
+
+    <!-- Active Company Banner Indicator -->
+    <div class="active-company-indicator" id="active-company-indicator">
+      <i data-lucide="building"></i> Active Workspace: <strong>WS Hospitality</strong>
     </div>
 
     <!-- Administrative Settings View (Toggled Panel) -->
@@ -163,6 +171,22 @@
             </button>
           </form>
         </div>
+      </div>
+    </section>
+
+    <!-- Live Dashboard Section (Summary Board) -->
+    <section id="live-dashboard-section" class="card hidden" style="margin-top: 1rem;">
+      <div class="card-header-flex">
+        <div class="card-header-title-area">
+          <h3 class="card-title"><i data-lucide="activity"></i> LIVE System Status Board</h3>
+          <p class="card-subtitle">Latest saved reconciliation runs across all workspaces</p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-status">
+          <i data-lucide="refresh-cw"></i> Refresh Status
+        </button>
+      </div>
+      <div class="live-status-grid" id="live-status-grid-container">
+        <!-- Dynamic cards injected by JS -->
       </div>
     </section>
 
