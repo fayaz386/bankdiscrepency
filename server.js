@@ -43,6 +43,7 @@ function readJSON(filePath) {
   }
 }
 
+// Ensure database folders and files exist
 function writeJSON(filePath, data) {
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
@@ -103,6 +104,28 @@ app.post('/api/users', (req, res) => {
     res.json({ message: `User account '${username}' created successfully!` });
   } else {
     res.status(500).json({ error: 'Failed to write user database to disk' });
+  }
+});
+
+// Change user password (Admin only)
+app.post('/api/users/password', (req, res) => {
+  const { username, newPassword } = req.body;
+  if (!username || !newPassword) {
+    return res.status(400).json({ error: 'Username and new password are required' });
+  }
+
+  const users = readJSON(USERS_FILE);
+  const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  user.password = newPassword;
+  if (writeJSON(USERS_FILE, users)) {
+    res.json({ message: `Password for user '${username}' updated successfully!` });
+  } else {
+    res.status(500).json({ error: 'Failed to update user password on disk' });
   }
 });
 

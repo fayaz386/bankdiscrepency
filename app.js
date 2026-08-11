@@ -1,6 +1,7 @@
 /**
  * ReconcileFlow - Frontend Core Application (Enhanced)
  * Supports Multi-Company workspaces, AMEX sub-tabs, user authentication, and admin settings.
+ * Includes separate Hotel and Restaurant Trial Balance grids, and multiple AMEX bank postings.
  */
 
 // --- CATEGORY CONFIGURATIONS ---
@@ -28,27 +29,28 @@ const CARD_BANK_INPUTS = [
   { id: 'debit2', name: 'Debit 2 Settled' }
 ];
 
-const AMEX_BANK_INPUTS = [
-  { id: 'amex', name: 'AMEX Settled' }
-];
-
 // --- APP STATE ---
 let currentUser = null;
 let activeCompany = 'ws_hospitality';
 let activeTab = 'cards';
 
-let tbColumns = []; // Array of columns: { date: 'YYYY-MM-DD', values: { visa: 0, mc: 0... } }
-let bankValues = {}; // Map of inputs: { visa: 0, mc: 0... }
-let history = []; // Array of saved reconciliation reports
+// Separate Grid States
+let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa: 0, mc: 0... } }]
+let restaurantColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa: 0, mc: 0... } }]
 
+// AMEX Bank Statement Postings
+let amexBankPostings = [{ id: 1, value: '' }];
+
+let history = []; // Array of saved reconciliation reports
 let trendChart = null;
 
 // --- DOM ELEMENTS ---
 let loginScreen, mainHeader, mainContainer, mainFooter;
 let loginForm, loginUsername, loginPassword;
 let userDisplayName, btnLogout, btnSettingsToggle, settingsView, btnCloseSettings, dashboardView;
-let companyTabsContainer, subTabsContainer, btnSampleData;
-let tbLabelsContainer, tbColumnsContainer, btnAddTbCol;
+let companyTabsContainer, subTabsContainer;
+let hotelLabelsContainer, hotelColumnsContainer, btnAddHotelCol;
+let restaurantLabelsContainer, restaurantColumnsContainer, btnAddRestaurantCol;
 let bankInputsContainer, bankBadgeTitle;
 let btnSave, btnClear, reconTbody;
 let totalLedgerDisplay, totalBankDisplay, netDiscrepancyDisplay, discrepancyIcon, discrepancyIconContainer;
@@ -78,11 +80,15 @@ document.addEventListener('DOMContentLoaded', () => {
   
   companyTabsContainer = document.getElementById('company-tabs-container');
   subTabsContainer = document.getElementById('sub-tabs-container');
-  btnSampleData = document.getElementById('btn-sample-data');
   
-  tbLabelsContainer = document.getElementById('tb-labels-container');
-  tbColumnsContainer = document.getElementById('tb-columns-container');
-  btnAddTbCol = document.getElementById('btn-add-tb-col');
+  hotelLabelsContainer = document.getElementById('hotel-labels-container');
+  hotelColumnsContainer = document.getElementById('hotel-columns-container');
+  btnAddHotelCol = document.getElementById('btn-add-hotel-col');
+
+  restaurantLabelsContainer = document.getElementById('restaurant-labels-container');
+  restaurantColumnsContainer = document.getElementById('restaurant-columns-container');
+  btnAddRestaurantCol = document.getElementById('btn-add-restaurant-col');
+
   bankInputsContainer = document.getElementById('bank-inputs-container');
   bankBadgeTitle = document.getElementById('bank-badge-title');
   
@@ -123,21 +129,22 @@ document.addEventListener('DOMContentLoaded', () => {
   btnCloseSettings.addEventListener('click', () => toggleSettingsView(false));
   addUserForm.addEventListener('submit', handleCreateUser);
   
-  // Theme and dynamic setup
   const themeToggle = document.getElementById('theme-toggle');
   themeToggle.addEventListener('click', toggleTheme);
   
-  // Listeners for Switching Company & Sub-Tabs
   setupNavigationTabs();
 
   // Columns & Inputs actions
-  btnAddTbCol.addEventListener('click', () => {
-    addTbColumn();
+  btnAddHotelCol.addEventListener('click', () => {
+    addTbColumn(true);
+  });
+  
+  btnAddRestaurantCol.addEventListener('click', () => {
+    addTbColumn(false);
   });
   
   document.getElementById('reconcile-form').addEventListener('submit', handleSaveReport);
   btnClear.addEventListener('click', handleClearForm);
-  btnSampleData.addEventListener('click', loadSampleData);
   
   // History exports
   btnExportCsv.addEventListener('click', exportCSV);
@@ -236,21 +243,18 @@ function showAuthenticatedUI() {
   mainContainer.classList.remove('hidden');
   mainFooter.classList.remove('hidden');
   
-  // Set User Details
   const roleLabel = currentUser.role === 'admin' ? 'Admin' : 'User';
   userDisplayName.textContent = `${currentUser.username} (${roleLabel})`;
   
-  // Toggle Admin capabilities
   if (currentUser.role === 'admin') {
     btnSettingsToggle.style.display = '';
     btnSettingsToggle.classList.remove('hidden');
   } else {
     btnSettingsToggle.style.display = 'none';
     btnSettingsToggle.classList.add('hidden');
-    toggleSettingsView(false); // Hide settings panel if they were on it
+    toggleSettingsView(false);
   }
   
-  // Initial loading of workspace data
   resetAppInputs();
   loadDataFromServer();
 }
@@ -288,11 +292,12 @@ function loadUsersDirectory() {
         const row = document.createElement('tr');
         const roleLabel = u.role === 'admin' ? 'Administrator' : 'Standard User';
         
-        let deleteBtn = '';
+        let actionsHtml = '';
+        // Change password key button
+        actionsHtml += `<button class="btn-table-action" onclick="changeUserPassword('${u.username}')" title="Change Password"><i data-lucide="key"></i></button>`;
+        
         if (u.username.toLowerCase() !== 'admin') {
-          deleteBtn = `<button class="btn-table-action delete" onclick="deleteUserAccount('${u.username}')" title="Delete User"><i data-lucide="trash-2"></i></button>`;
-        } else {
-          deleteBtn = `<span class="val-neutral" style="font-size:0.8rem">System Lock</span>`;
+          actionsHtml += `<button class="btn-table-action delete" onclick="deleteUserAccount('${u.username}')" title="Delete User"><i data-lucide="trash-2"></i></button>`;
         }
 
         row.innerHTML = `
@@ -300,7 +305,7 @@ function loadUsersDirectory() {
           <td><span class="badge ${u.role === 'admin' ? 'badge-purple' : 'badge-blue'}">${roleLabel}</span></td>
           <td class="actions-col">
             <div class="action-icon-buttons">
-              ${deleteBtn}
+              ${actionsHtml}
             </div>
           </td>
         `;
@@ -365,6 +370,32 @@ window.deleteUserAccount = function(username) {
   }
 };
 
+window.changeUserPassword = function(username) {
+  const newPass = prompt(`Enter new password for user '${username}':`);
+  if (newPass === null) return;
+  const cleanPass = newPass.trim();
+  if (cleanPass.length < 4) {
+    showToast('Password must be at least 4 characters long', 'error');
+    return;
+  }
+
+  fetch('/api/users/password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, newPassword: cleanPass })
+  })
+    .then(res => {
+      if (!res.ok) return res.json().then(d => { throw new Error(d.error) });
+      return res.json();
+    })
+    .then(data => {
+      showToast(data.message, 'success');
+    })
+    .catch(err => {
+      showToast(err.message, 'error');
+    });
+};
+
 // --- DYNAMIC SHEETS AND NAVIGATION TABS ---
 
 function setupNavigationTabs() {
@@ -376,7 +407,7 @@ function setupNavigationTabs() {
       btn.classList.add('active');
       activeCompany = btn.getAttribute('data-company');
       
-      toggleSettingsView(false); // Close settings if open
+      toggleSettingsView(false);
       resetAppInputs();
       loadDataFromServer();
       showToast(`Switched workspace to ${btn.textContent}`, 'info');
@@ -391,7 +422,7 @@ function setupNavigationTabs() {
       btn.classList.add('active');
       activeTab = btn.getAttribute('data-tab');
 
-      toggleSettingsView(false); // Close settings if open
+      toggleSettingsView(false);
       resetAppInputs();
       loadDataFromServer();
     });
@@ -399,39 +430,44 @@ function setupNavigationTabs() {
 }
 
 function resetAppInputs() {
-  tbColumns = [];
-  bankValues = {};
+  hotelColumns = [];
+  restaurantColumns = [];
   
-  // Set up appropriate title badges
   if (activeTab === 'cards') {
     bankBadgeTitle.textContent = "Bank Settled (Visa/MC/Discover/Debit)";
   } else {
     bankBadgeTitle.textContent = "Bank Settled (AMEX)";
+    amexBankPostings = [{ id: Date.now(), value: '' }];
   }
   
-  // Initialize dynamic structure
-  renderTbLabels();
+  // Render Labels
+  renderTbLabels(hotelLabelsContainer);
+  renderTbLabels(restaurantLabelsContainer);
+
+  // Render Bank Form
   renderBankInputsList();
   
-  // Always initialize with 1 blank column
-  addTbColumn();
+  // Initialize with 1 blank column each
+  addTbColumn(true);
+  addTbColumn(false);
+
   calculateReconciliation();
 }
 
-function renderTbLabels() {
-  tbLabelsContainer.innerHTML = '';
+function renderTbLabels(container) {
+  container.innerHTML = '';
   
   const headerCell = document.createElement('div');
   headerCell.className = 'sheet-label-cell header-cell';
   headerCell.textContent = 'TB Date';
-  tbLabelsContainer.appendChild(headerCell);
+  container.appendChild(headerCell);
 
   const rows = activeTab === 'cards' ? CARD_ROWS : AMEX_ROWS;
   rows.forEach(row => {
     const labelCell = document.createElement('div');
     labelCell.className = 'sheet-label-cell';
     labelCell.textContent = row.name;
-    tbLabelsContainer.appendChild(labelCell);
+    container.appendChild(labelCell);
   });
 }
 
@@ -447,34 +483,96 @@ function renderBankInputsList() {
   `;
   bankInputsContainer.appendChild(dateRow);
   
-  // Set current date on newly created date field
   const bankDateInput = document.getElementById('bank-date');
   bankDateInput.value = formatDate(new Date());
-  
-  // Add live update trigger
   bankDateInput.addEventListener('change', calculateReconciliation);
 
-  // Render monetary inputs rows
-  const inputs = activeTab === 'cards' ? CARD_BANK_INPUTS : AMEX_BANK_INPUTS;
-  inputs.forEach(inp => {
-    const inputRow = document.createElement('div');
-    inputRow.className = 'bank-input-row';
-    inputRow.innerHTML = `
-      <label for="bank-${inp.id}">${inp.name}</label>
-      <div class="input-prefix">
-        <span>$</span>
-        <input type="number" id="bank-${inp.id}" step="0.01" placeholder="0.00">
-      </div>
-    `;
-    bankInputsContainer.appendChild(inputRow);
-    
-    // Add live calculation listeners
-    const inputField = document.getElementById(`bank-${inp.id}`);
-    inputField.addEventListener('input', calculateReconciliation);
-  });
+  if (activeTab === 'cards') {
+    // Normal Cards list
+    CARD_BANK_INPUTS.forEach(inp => {
+      const inputRow = document.createElement('div');
+      inputRow.className = 'bank-input-row';
+      inputRow.innerHTML = `
+        <label for="bank-${inp.id}">${inp.name}</label>
+        <div class="input-prefix">
+          <span>$</span>
+          <input type="number" id="bank-${inp.id}" step="0.01" placeholder="0.00">
+        </div>
+      `;
+      bankInputsContainer.appendChild(inputRow);
+      
+      const inputField = document.getElementById(`bank-${inp.id}`);
+      inputField.addEventListener('input', calculateReconciliation);
+    });
+  } else {
+    // AMEX Multiple Postings List
+    renderAmexPostingsList();
+  }
 }
 
-function addTbColumn(initialValues = null) {
+function renderAmexPostingsList() {
+  // Remove any existing AMEX posting rows or add button first
+  const existingRows = bankInputsContainer.querySelectorAll('.amex-posting-row');
+  existingRows.forEach(r => r.remove());
+  const existingBtn = document.getElementById('btn-add-amex-posting');
+  if (existingBtn) existingBtn.remove();
+
+  amexBankPostings.forEach((post, index) => {
+    const row = document.createElement('div');
+    row.className = 'bank-input-row amex-posting-row';
+    
+    let deleteBtnHtml = '';
+    if (amexBankPostings.length > 1) {
+      deleteBtnHtml = `<button type="button" class="btn-del-col" style="margin-left: 8px" onclick="deleteAmexPosting(${post.id})" title="Delete Posting"><i data-lucide="trash-2"></i></button>`;
+    }
+
+    row.innerHTML = `
+      <label for="bank-amex-${post.id}">AMEX Posting #${index + 1}</label>
+      <div style="display: flex; align-items: center; width: 100%;">
+        <div class="input-prefix" style="flex: 1;">
+          <span>$</span>
+          <input type="number" id="bank-amex-${post.id}" step="0.01" placeholder="0.00" value="${post.value}">
+        </div>
+        ${deleteBtnHtml}
+      </div>
+    `;
+    bankInputsContainer.appendChild(row);
+
+    const inputField = document.getElementById(`bank-amex-${post.id}`);
+    inputField.addEventListener('input', (e) => {
+      post.value = e.target.value === '' ? '' : parseFloat(e.target.value);
+      calculateReconciliation();
+    });
+  });
+
+  // Append Add Button
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'btn btn-sm btn-secondary';
+  addBtn.id = 'btn-add-amex-posting';
+  addBtn.style.width = '100%';
+  addBtn.style.marginTop = '10px';
+  addBtn.innerHTML = `<i data-lucide="plus"></i> Add AMEX Posting`;
+  addBtn.addEventListener('click', addAmexPosting);
+  
+  bankInputsContainer.appendChild(addBtn);
+  lucide.createIcons();
+}
+
+function addAmexPosting() {
+  amexBankPostings.push({ id: Date.now(), value: '' });
+  renderAmexPostingsList();
+  calculateReconciliation();
+}
+
+window.deleteAmexPosting = function(id) {
+  if (amexBankPostings.length <= 1) return;
+  amexBankPostings = amexBankPostings.filter(p => p.id !== id);
+  renderAmexPostingsList();
+  calculateReconciliation();
+};
+
+function addTbColumn(isHotel, initialValues = null) {
   const defaultDate = formatDate(new Date());
   const rows = activeTab === 'cards' ? CARD_ROWS : AMEX_ROWS;
   
@@ -484,31 +582,38 @@ function addTbColumn(initialValues = null) {
   });
 
   const colDate = initialValues && initialValues.date ? initialValues.date : defaultDate;
-
-  tbColumns.push({
+  const colObj = {
     date: colDate,
     values: defaultValues
-  });
+  };
 
-  renderTbColumns();
+  if (isHotel) {
+    hotelColumns.push(colObj);
+    renderGridColumns(hotelColumnsContainer, hotelColumns, true);
+  } else {
+    restaurantColumns.push(colObj);
+    renderGridColumns(restaurantColumnsContainer, restaurantColumns, false);
+  }
+
   calculateReconciliation();
 }
 
-function deleteTbColumn(index) {
-  if (tbColumns.length <= 1) {
+function deleteTbColumn(isHotel, index) {
+  const cols = isHotel ? hotelColumns : restaurantColumns;
+  if (cols.length <= 1) {
     showToast('Cannot delete the only remaining Trial Balance column.', 'error');
     return;
   }
-  tbColumns.splice(index, 1);
-  renderTbColumns();
+  cols.splice(index, 1);
+  renderGridColumns(isHotel ? hotelColumnsContainer : restaurantColumnsContainer, cols, isHotel);
   calculateReconciliation();
 }
 
-function renderTbColumns() {
-  tbColumnsContainer.innerHTML = '';
+function renderGridColumns(container, colsArray, isHotel) {
+  container.innerHTML = '';
   const rows = activeTab === 'cards' ? CARD_ROWS : AMEX_ROWS;
 
-  tbColumns.forEach((col, index) => {
+  colsArray.forEach((col, index) => {
     const colDiv = document.createElement('div');
     colDiv.className = 'spreadsheet-col';
     
@@ -531,7 +636,7 @@ function renderTbColumns() {
     deleteBtn.title = 'Delete Column';
     deleteBtn.innerHTML = '<i data-lucide="trash-2"></i>';
     deleteBtn.addEventListener('click', () => {
-      deleteTbColumn(index);
+      deleteTbColumn(isHotel, index);
     });
     headerCell.appendChild(deleteBtn);
 
@@ -565,7 +670,7 @@ function renderTbColumns() {
       colDiv.appendChild(valCell);
     });
 
-    tbColumnsContainer.appendChild(colDiv);
+    container.appendChild(colDiv);
   });
   
   lucide.createIcons();
@@ -573,9 +678,20 @@ function renderTbColumns() {
 
 // --- CORE RECONCILIATION CALCULATION LOGIC ---
 
+function sumGridRow(cols, rowId) {
+  let sum = 0;
+  cols.forEach(col => {
+    const val = col.values[rowId];
+    if (typeof val === 'number') {
+      sum += val;
+    }
+  });
+  return sum;
+}
+
 function runReconciliationLogic() {
   const result = {
-    tbSums: {},
+    tbSums: {}, // Combined sum of Hotel + Restaurant row values
     bank: {},
     rows: [],
     totalLedger: 0,
@@ -584,23 +700,26 @@ function runReconciliationLogic() {
   };
 
   // 1. Gather Bank Statement Inputs
-  const bankInputs = activeTab === 'cards' ? CARD_BANK_INPUTS : AMEX_BANK_INPUTS;
-  bankInputs.forEach(inp => {
-    const el = document.getElementById(`bank-${inp.id}`);
-    result.bank[inp.id] = el && el.value !== '' ? parseFloat(el.value) : 0;
-  });
+  if (activeTab === 'cards') {
+    CARD_BANK_INPUTS.forEach(inp => {
+      const el = document.getElementById(`bank-${inp.id}`);
+      result.bank[inp.id] = el && el.value !== '' ? parseFloat(el.value) : 0;
+    });
+  } else {
+    // Sum of all AMEX postings
+    let totalAmexBank = 0;
+    amexBankPostings.forEach(p => {
+      if (typeof p.value === 'number') totalAmexBank += p.value;
+    });
+    result.bank['amex'] = totalAmexBank;
+  }
 
-  // 2. Sum Trial Balance columns
+  // 2. Sum Trial Balance categories (Combined Hotel + Restaurant)
   const rows = activeTab === 'cards' ? CARD_ROWS : AMEX_ROWS;
   rows.forEach(r => {
-    let rowSum = 0;
-    tbColumns.forEach(col => {
-      const val = col.values[r.id];
-      if (typeof val === 'number') {
-        rowSum += val;
-      }
-    });
-    result.tbSums[r.id] = rowSum;
+    const hotelSum = sumGridRow(hotelColumns, r.id);
+    const restaurantSum = sumGridRow(restaurantColumns, r.id);
+    result.tbSums[r.id] = hotelSum + restaurantSum;
   });
 
   // 3. Map values and calculate discrepancies
@@ -656,14 +775,13 @@ function runReconciliationLogic() {
 function calculateReconciliation() {
   const result = runReconciliationLogic();
 
-  // Save state globally for easy exports
+  // Save state globally for exports
   bankValues = result.bank;
 
   // Render to Live Table
   reconTbody.innerHTML = '';
   result.rows.forEach(r => {
     const row = document.createElement('tr');
-    
     const diffClass = r.diff > 0.005 ? 'val-positive' : (r.diff < -0.005 ? 'val-negative' : 'val-neutral');
     const statusText = Math.abs(r.diff) <= 0.005 
       ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>' 
@@ -698,12 +816,11 @@ function calculateReconciliation() {
   `;
   reconTbody.appendChild(totalRow);
 
-  // Update Bottom Dashboard Summary Metrics Widgets
+  // Update Summary displays
   totalLedgerDisplay.textContent = formatCurrency(result.totalLedger);
   totalBankDisplay.textContent = formatCurrency(result.totalBank);
   netDiscrepancyDisplay.textContent = formatCurrency(result.netDiscrepancy);
 
-  // Style bottom discrepancy card dynamically
   const discCard = document.getElementById('card-discrepancy');
   if (Math.abs(result.netDiscrepancy) <= 0.005) {
     netDiscrepancyDisplay.className = 'val-neutral';
@@ -714,8 +831,6 @@ function calculateReconciliation() {
     netDiscrepancyDisplay.className = result.netDiscrepancy > 0 ? 'val-positive' : 'val-negative';
     discrepancyIcon.setAttribute('data-lucide', 'alert-circle');
     discrepancyIconContainer.style.setProperty('--icon-color', result.netDiscrepancy > 0 ? 'var(--accent-green)' : 'var(--accent-red)');
-    
-    // Add pulsing border alert
     const pulseColor = result.netDiscrepancy > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
     discCard.style.boxShadow = `0 0 20px ${pulseColor}`;
   }
@@ -756,9 +871,10 @@ function handleSaveReport(e) {
   const bankDate = bankDateInput.value;
 
   // Ensure all columns have dates
-  const missingDateIndex = tbColumns.findIndex(col => !col.date);
-  if (missingDateIndex !== -1) {
-    showToast(`Trial Balance day #${missingDateIndex + 1} has no date filled!`, 'error');
+  const missingHotelIdx = hotelColumns.findIndex(col => !col.date);
+  const missingRestIdx = restaurantColumns.findIndex(col => !col.date);
+  if (missingHotelIdx !== -1 || missingRestIdx !== -1) {
+    showToast(`All Trial Balance columns must have dates filled!`, 'error');
     return;
   }
 
@@ -766,27 +882,33 @@ function handleSaveReport(e) {
 
   // Create range label for history (e.g. "Aug 4 - Aug 6")
   let tbDateLabel = '';
-  const sortedDates = tbColumns.map(c => c.date).sort();
-  if (sortedDates.length === 1) {
-    tbDateLabel = sortedDates[0];
+  // Combine all sorted dates
+  const allDates = [...hotelColumns, ...restaurantColumns].map(c => c.date).sort();
+  const sortedUniqueDates = [...new Set(allDates)];
+  if (sortedUniqueDates.length === 1) {
+    tbDateLabel = sortedUniqueDates[0];
   } else {
     const options = { month: 'short', day: 'numeric' };
-    const startFmt = new Date(sortedDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
-    const endFmt = new Date(sortedDates[sortedDates.length - 1] + 'T00:00:00').toLocaleDateString('en-US', options);
+    const startFmt = new Date(sortedUniqueDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
+    const endFmt = new Date(sortedUniqueDates[sortedUniqueDates.length - 1] + 'T00:00:00').toLocaleDateString('en-US', options);
     tbDateLabel = `${startFmt} - ${endFmt}`;
   }
 
-  // Composite Unique ID to segment reports properly
-  const reportId = `${activeCompany}_${activeTab}_${sortedDates[0]}_${bankDate}`;
+  const primaryDate = sortedUniqueDates[0] || formatDate(new Date());
+  const reportId = `${activeCompany}_${activeTab}_${primaryDate}_${bankDate}`;
 
   const report = {
     id: reportId,
     companyId: activeCompany,
     reconType: activeTab,
     tbDateLabel,
-    primaryTbDate: sortedDates[0],
+    primaryTbDate: primaryDate,
     bankDate,
-    tbColumns: JSON.parse(JSON.stringify(tbColumns)), // Deep clone input grid values
+    // Store Hotel and Restaurant columns separately
+    hotelColumns: JSON.parse(JSON.stringify(hotelColumns)),
+    restaurantColumns: JSON.parse(JSON.stringify(restaurantColumns)),
+    // Store AMEX postings if active
+    amexBankPostings: activeTab === 'amex' ? JSON.parse(JSON.stringify(amexBankPostings)) : null,
     bank: calculation.bank,
     totalLedger: calculation.totalLedger,
     totalBank: calculation.totalBank,
@@ -807,7 +929,7 @@ function handleSaveReport(e) {
     })
     .then(data => {
       showToast(data.message || 'Report saved successfully!', 'success');
-      loadDataFromServer(); // Refresh history
+      loadDataFromServer();
     })
     .catch(err => {
       console.error(err);
@@ -827,7 +949,7 @@ window.deleteReportRecord = function(id) {
       })
       .then(data => {
         showToast(data.message || 'Deleted successfully.', 'success');
-        loadDataFromServer(); // Refresh history
+        loadDataFromServer();
       })
       .catch(err => {
         console.error(err);
@@ -839,11 +961,9 @@ window.deleteReportRecord = function(id) {
 window.editReportRecord = function(id) {
   const report = history.find(r => r.id === id);
   if (report) {
-    // 1. Set sub-tab and company if they don't match (already matches if loaded in table, but to be safe)
     activeCompany = report.companyId;
     activeTab = report.reconType;
     
-    // Toggle active classes in HTML
     companyTabsContainer.querySelectorAll('.company-tab').forEach(b => {
       b.classList.toggle('active', b.getAttribute('data-company') === activeCompany);
     });
@@ -857,27 +977,48 @@ window.editReportRecord = function(id) {
       bankBadgeTitle.textContent = "Bank Settled (AMEX)";
     }
 
-    renderTbLabels();
+    renderTbLabels(hotelLabelsContainer);
+    renderTbLabels(restaurantLabelsContainer);
     renderBankInputsList();
 
-    // 2. Set bank date
     const bankDateInput = document.getElementById('bank-date');
     if (bankDateInput) bankDateInput.value = report.bankDate;
 
-    // 3. Load dynamic Trial Balance columns state
-    tbColumns = JSON.parse(JSON.stringify(report.tbColumns));
-    renderTbColumns();
+    // Load grids state (Hotel & Restaurant)
+    // Back-compatibility: if report has old tbColumns, load it to hotelColumns, and keep restaurantColumns blank
+    if (report.hotelColumns) {
+      hotelColumns = JSON.parse(JSON.stringify(report.hotelColumns));
+      restaurantColumns = JSON.parse(JSON.stringify(report.restaurantColumns || []));
+    } else if (report.tbColumns) {
+      hotelColumns = JSON.parse(JSON.stringify(report.tbColumns));
+      restaurantColumns = [];
+    } else {
+      hotelColumns = [];
+      restaurantColumns = [];
+    }
 
-    // 4. Load Bank statement inputs
-    const inputs = activeTab === 'cards' ? CARD_BANK_INPUTS : AMEX_BANK_INPUTS;
-    inputs.forEach(inp => {
-      const input = document.getElementById(`bank-${inp.id}`);
-      if (input) input.value = report.bank[inp.id] || '';
-    });
+    renderGridColumns(hotelColumnsContainer, hotelColumns, true);
+    renderGridColumns(restaurantColumnsContainer, restaurantColumns, false);
+
+    // Load AMEX postings or Card inputs
+    if (activeTab === 'cards') {
+      CARD_BANK_INPUTS.forEach(inp => {
+        const input = document.getElementById(`bank-${inp.id}`);
+        if (input) input.value = report.bank[inp.id] || '';
+      });
+    } else {
+      // Load saved AMEX postings list
+      if (report.amexBankPostings) {
+        amexBankPostings = JSON.parse(JSON.stringify(report.amexBankPostings));
+      } else {
+        amexBankPostings = [{ id: Date.now(), value: report.bank['amex'] || '' }];
+      }
+      renderAmexPostingsList();
+    }
 
     calculateReconciliation();
-    toggleSettingsView(false); // Make sure dashboard is visible
-    showToast(`Loaded report for Bank Date ${report.bankDate} into workspace.`, 'success');
+    toggleSettingsView(false);
+    showToast(`Loaded report for Bank Date ${report.bankDate}.`, 'success');
   }
 };
 
@@ -886,17 +1027,11 @@ window.editReportRecord = function(id) {
 function getFilteredHistory() {
   let filtered = [...history];
 
-  // Date Filters
   const from = historyFromDate.value;
   const to = historyToDate.value;
-  if (from) {
-    filtered = filtered.filter(r => r.bankDate >= from);
-  }
-  if (to) {
-    filtered = filtered.filter(r => r.bankDate <= to);
-  }
+  if (from) filtered = filtered.filter(r => r.bankDate >= from);
+  if (to) filtered = filtered.filter(r => r.bankDate <= to);
 
-  // Status Filter
   const status = historyStatusFilter.value;
   if (status === 'reconciled') {
     filtered = filtered.filter(r => Math.abs(r.netDiscrepancy) <= 0.005);
@@ -920,7 +1055,6 @@ function renderHistoryTable() {
 
   filtered.forEach(r => {
     const row = document.createElement('tr');
-    
     const diffClass = r.netDiscrepancy > 0.005 ? 'val-positive' : (r.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
     const statusText = Math.abs(r.netDiscrepancy) <= 0.005 
       ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>' 
@@ -942,7 +1076,6 @@ function renderHistoryTable() {
       </td>
     `;
     
-    // Hide delete buttons inside table rows if standard user
     if (currentUser && currentUser.role !== 'admin') {
       const delBtn = row.querySelector('.btn-table-action.delete');
       if (delBtn) delBtn.style.display = 'none';
@@ -952,70 +1085,6 @@ function renderHistoryTable() {
   });
 
   lucide.createIcons();
-}
-
-// --- SAMPLE DATA LOADERS ---
-
-function loadSampleData() {
-  tbColumns = [];
-  
-  if (activeTab === 'cards') {
-    // 3-Day Weekend Cards Example
-    const col1 = {
-      date: '2026-08-04',
-      values: { visa: 10561.37, mc: 20843.78, discover: 0.00, debit1: 687.01, debit2: 0.00, visapos: 154.50, mcpos: 0.00, diner: 0.00 }
-    };
-    const col2 = {
-      date: '2026-08-05',
-      values: { visa: 12771.89, mc: 16985.01, discover: 178.13, debit1: 1478.67, debit2: 0.00, visapos: 1609.86, mcpos: 0.00, diner: 0.00 }
-    };
-    const col3 = {
-      date: '2026-08-06',
-      values: { visa: 5232.48, mc: 14420.87, discover: 0.00, debit1: 200.54, debit2: 0.00, visapos: 4.50, mcpos: 308.42, diner: 0.00 }
-    };
-
-    tbColumns.push(col1, col2, col3);
-    renderTbColumns();
-
-    // Set bank date
-    const bankDateInput = document.getElementById('bank-date');
-    if (bankDateInput) bankDateInput.value = '2026-08-06';
-
-    // Set bank statement settled entries
-    document.getElementById('bank-visa').value = '30325.60';
-    document.getElementById('bank-mc').value = '52790.22';
-    document.getElementById('bank-discover').value = '178.13';
-    document.getElementById('bank-debit1').value = '2375.22';
-    document.getElementById('bank-debit2').value = '0.00';
-
-  } else {
-    // AMEX Example
-    const col1 = {
-      date: '2026-08-04',
-      values: { amex: 1250.00, amexpos: 150.00 }
-    };
-    const col2 = {
-      date: '2026-08-05',
-      values: { amex: 1800.50, amexpos: 0.00 }
-    };
-    const col3 = {
-      date: '2026-08-06',
-      values: { amex: 950.25, amexpos: 75.00 }
-    };
-
-    tbColumns.push(col1, col2, col3);
-    renderTbColumns();
-
-    // Set bank date
-    const bankDateInput = document.getElementById('bank-date');
-    if (bankDateInput) bankDateInput.value = '2026-08-06';
-
-    // Set bank statement settled entries (matches ledger total: 1250+150 + 1800.50 + 950.25+75 = 4225.75)
-    document.getElementById('bank-amex').value = '4225.75';
-  }
-
-  calculateReconciliation();
-  showToast('Standard 3-day weekend example loaded!', 'info');
 }
 
 // --- ANALYTICS CHARTS ---
@@ -1065,7 +1134,6 @@ function initChart() {
 function updateChart() {
   if (!trendChart) return;
 
-  // Gather last 30 reports sorted chronologically
   const sortedReports = [...history]
     .sort((a, b) => new Date(a.bankDate) - new Date(b.bankDate))
     .slice(-30);
@@ -1076,7 +1144,6 @@ function updateChart() {
   trendChart.data.labels = labels;
   trendChart.data.datasets[0].data = data;
 
-  // Set line colors based on discrepancy trend
   const hasDiscrepancies = data.some(val => Math.abs(val) > 0.005);
   trendChart.data.datasets[0].borderColor = hasDiscrepancies ? '#ef4444' : '#10b981';
   trendChart.data.datasets[0].backgroundColor = hasDiscrepancies ? 'rgba(239, 68, 68, 0.05)' : 'rgba(16, 185, 129, 0.05)';
@@ -1123,7 +1190,6 @@ function exportCSV() {
     csvContent += `"${r.tbDateLabel}",${r.bankDate},${r.totalLedger.toFixed(2)},${r.totalBank.toFixed(2)},${r.netDiscrepancy.toFixed(2)},${status}\n`;
   });
 
-  // Append Summarized Totals row
   csvContent += `\n"ROLL-UP PERIOD SUMS",,${totalLedgerSum.toFixed(2)},${totalBankSum.toFixed(2)},${totalNetDiff.toFixed(2)},${Math.abs(totalNetDiff) <= 0.005 ? 'Balanced' : 'Out of Balance'}\n`;
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1144,40 +1210,33 @@ function exportCSV() {
 
 const { jsPDF } = window.jspdf;
 
-function generateReconciliationPDF(tbDatesStr, bankDateStr, tbCols, bankValuesForPDF) {
+function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols, bankValuesForPDF) {
   const doc = new jsPDF();
   const isCards = activeTab === 'cards';
   const compName = activeCompany === 'ws_hospitality' ? 'WS Hospitality' : 'WS Hotels';
   
-  // Header Branding Accent
   doc.setFillColor(59, 130, 246);
   doc.rect(0, 0, 210, 15, 'F');
   
-  // Header Title
   doc.setFont("Helvetica", "bold");
   doc.setFontSize(18);
   doc.setTextColor(255, 255, 255);
   doc.text("ReconcileFlow Report", 14, 10);
   
-  // Company & Workspace
   doc.setFontSize(10);
   doc.text(`${compName} - ${isCards ? 'Cards' : 'AMEX'} Reconciliation`, 140, 10);
 
-  // Metadata Block
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(11);
   doc.text(`Bank Statement Date: ${bankDateStr}`, 14, 28);
   doc.text(`Trial Balance Range: ${tbDatesStr}`, 14, 34);
   doc.text(`Report Generated: ${new Date().toLocaleString()}`, 140, 28);
 
-  // Divider Line
   doc.setDrawColor(226, 232, 240);
   doc.line(14, 38, 196, 38);
 
-  // Process data using runReconciliationLogic
   const result = runReconciliationLogic();
 
-  // Create Table 1: Breakdown Table
   const breakdownHeaders = [["Reconciliation Category", "Ledger Total (CB)", "Bank Statement", "Discrepancy", "Status"]];
   const breakdownRows = result.rows.map(r => {
     return [
@@ -1189,7 +1248,6 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, tbCols, bankValuesFo
     ];
   });
 
-  // Append Total Row to Table
   breakdownRows.push([
     "TOTALS",
     formatCurrency(result.totalLedger),
@@ -1212,13 +1270,11 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, tbCols, bankValuesFo
       4: { halign: 'center' }
     },
     didParseCell: function (data) {
-      // Style the final totals summary row uniquely
       if (data.row.index === breakdownRows.length - 1) {
         data.cell.styles.fontStyle = 'bold';
         data.cell.styles.fillColor = [241, 245, 249];
         
         if (data.column.index === 3) {
-          // Color code total net difference
           if (result.netDiscrepancy > 0.005) {
             data.cell.styles.textColor = [16, 185, 129];
           } else if (result.netDiscrepancy < -0.005) {
@@ -1226,7 +1282,6 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, tbCols, bankValuesFo
           }
         }
       } else {
-        // Color code individual discrepancy differences
         if (data.column.index === 3) {
           const val = result.rows[data.row.index].diff;
           if (val > 0.005) data.cell.styles.textColor = [16, 185, 129];
@@ -1251,7 +1306,6 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, tbCols, bankValuesFo
   doc.text(`Total Ledger Receipts: ${formatCurrency(result.totalLedger)}`, 20, currentY + 18);
   doc.text(`Total Bank Deposits:   ${formatCurrency(result.totalBank)}`, 20, currentY + 26);
 
-  // Status highlights in Summary Banner
   if (Math.abs(result.netDiscrepancy) <= 0.005) {
     doc.setFillColor(209, 250, 229);
     doc.roundedRect(120, currentY + 6, 68, 22, 2, 2, 'F');
@@ -1270,7 +1324,6 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, tbCols, bankValuesFo
     doc.text(`Difference: ${formatCurrency(result.netDiscrepancy)}`, 132, currentY + 21);
   }
 
-  // Footer notes
   doc.setTextColor(148, 163, 184);
   doc.setFontSize(8);
   doc.text("Generated by ReconcileFlow. Audit ledger copy.", 14, 285);
@@ -1285,15 +1338,15 @@ function downloadCurrentReportPDF() {
     return;
   }
 
-  // Sort dates
-  const sortedDates = tbColumns.map(c => c.date).sort();
-  let rangeLabel = sortedDates[0];
-  if (sortedDates.length > 1) {
-    rangeLabel = `${sortedDates[0]} to ${sortedDates[sortedDates.length - 1]}`;
+  // Combine dates
+  const allDates = [...hotelColumns, ...restaurantColumns].map(c => c.date).sort();
+  const sortedUniqueDates = [...new Set(allDates)];
+  let rangeLabel = sortedUniqueDates[0];
+  if (sortedUniqueDates.length > 1) {
+    rangeLabel = `${sortedUniqueDates[0]} to ${sortedUniqueDates[sortedUniqueDates.length - 1]}`;
   }
 
-  const doc = generateReconciliationPDF(rangeLabel, bankDateInput.value, tbColumns, bankValues);
-  
+  const doc = generateReconciliationPDF(rangeLabel, bankDateInput.value, hotelColumns, restaurantColumns, bankValues);
   const compFileStr = activeCompany === 'ws_hospitality' ? 'WS_Hospitality' : 'WS_Hotels';
   const tabName = activeTab === 'cards' ? 'Cards' : 'AMEX';
   doc.save(`Reconciliation_${compFileStr}_${tabName}_${bankDateInput.value}.pdf`);
@@ -1307,12 +1360,10 @@ function exportReportToPDF(id) {
     return;
   }
 
-  // Generate PDF from the archived report data parameters
   const doc = new jsPDF();
   const isCards = report.reconType === 'cards';
   const compName = report.companyId === 'ws_hospitality' ? 'WS Hospitality' : 'WS Hotels';
   
-  // Header Branding Accent
   doc.setFillColor(59, 130, 246);
   doc.rect(0, 0, 210, 15, 'F');
   
@@ -1333,20 +1384,25 @@ function exportReportToPDF(id) {
   doc.setDrawColor(226, 232, 240);
   doc.line(14, 38, 196, 38);
 
-  // Recalculate sums based on saved columns structure
+  // Recalculate sums
   const breakdownHeaders = [["Reconciliation Category", "Ledger Total (CB)", "Bank Statement", "Discrepancy", "Status"]];
   const breakdownRows = [];
   
-  // Calculate sums
+  // Calculate sums from saved grids
   const tbSums = {};
   const rows = isCards ? CARD_ROWS : AMEX_ROWS;
   rows.forEach(r => {
-    let rowSum = 0;
-    report.tbColumns.forEach(col => {
-      const val = col.values[r.id];
-      if (typeof val === 'number') rowSum += val;
-    });
-    tbSums[r.id] = rowSum;
+    let hotelSum = 0;
+    let restaurantSum = 0;
+    
+    if (report.hotelColumns) {
+      hotelSum = sumGridRow(report.hotelColumns, r.id);
+      restaurantSum = sumGridRow(report.restaurantColumns || [], r.id);
+    } else if (report.tbColumns) {
+      hotelSum = sumGridRow(report.tbColumns, r.id);
+    }
+    
+    tbSums[r.id] = hotelSum + restaurantSum;
   });
 
   if (isCards) {
@@ -1459,8 +1515,7 @@ function downloadSummaryPDF() {
   const tabName = isCards ? 'Cards' : 'AMEX';
   const companyName = activeCompany === 'ws_hospitality' ? 'WS Hospitality' : 'WS Hotels';
 
-  // Banner branding
-  doc.setFillColor(139, 92, 246); // purple for summary reports
+  doc.setFillColor(139, 92, 246);
   doc.rect(0, 0, 210, 15, 'F');
 
   doc.setFont("Helvetica", "bold");
@@ -1474,7 +1529,6 @@ function downloadSummaryPDF() {
   doc.text(`Recon Type: ${tabName} Accounts`, 14, 34);
   doc.text(`Generated: ${new Date().toLocaleString()}`, 130, 28);
 
-  // Filters display
   const fromVal = historyFromDate.value || 'Beginning';
   const toVal = historyToDate.value || 'Today';
   doc.text(`Date Filters: ${fromVal} to ${toVal}`, 14, 40);
@@ -1482,7 +1536,6 @@ function downloadSummaryPDF() {
   doc.setDrawColor(226, 232, 240);
   doc.line(14, 44, 196, 44);
 
-  // Build roll-up data
   const summaryHeaders = [["TB Date Range", "Bank Date", "Ledger Total (CB)", "Bank Total (Col I)", "Net Discrepancy", "Status"]];
   let totalLedgerSum = 0;
   let totalBankSum = 0;
@@ -1503,7 +1556,6 @@ function downloadSummaryPDF() {
     ];
   });
 
-  // Append roll-up summary totals row
   summaryRows.push([
     "ROLL-UP TOTALS",
     "",
@@ -1560,7 +1612,6 @@ function toggleTheme() {
     body.classList.add('dark-theme');
     localStorage.setItem('theme', 'dark-theme');
   }
-  // Refresh chart scales with new theme text contrast
   updateChart();
 }
 
@@ -1585,7 +1636,6 @@ function showToast(message, type = 'info') {
 
   toastMessage.textContent = message;
   
-  // Set icons based on status type
   if (type === 'success') {
     toast.className = 'toast show success';
     toastIcon.setAttribute('data-lucide', 'check-circle-2');
@@ -1599,7 +1649,6 @@ function showToast(message, type = 'info') {
 
   lucide.createIcons();
 
-  // Slide down toast after 3.5 seconds
   setTimeout(() => {
     toast.classList.remove('show');
   }, 3500);
@@ -1618,11 +1667,12 @@ function copySummaryToClipboard() {
   const tabName = activeTab === 'cards' ? 'Cards' : 'AMEX';
 
   let text = `RECONCILIATION SUMMARY: ${compName} (${tabName})\n`;
-  text += `Trial Balance: ${tbColumns.map(c => c.date).join(', ')}\n`;
-  text += `Bank Statement: ${document.getElementById('bank-date').value}\n`;
+  text += `Hotel Trial Balance Days: ${hotelColumns.map(c => c.date).join(', ')}\n`;
+  text += `Restaurant Trial Balance Days: ${restaurantColumns.map(c => c.date).join(', ')}\n`;
+  text += `Bank Statement Date: ${document.getElementById('bank-date').value}\n`;
   text += `=========================================\n`;
   result.rows.forEach(r => {
-    text += `${r.name}: Ledger ${formatCurrency(r.ledger)} | Bank ${formatCurrency(r.bank)} | Diff: ${(r.diff > 0 ? '+' : '')}${formatCurrency(r.diff)}\n`;
+    text += `${r.name}: Ledger Total ${formatCurrency(r.ledger)} | Bank ${formatCurrency(r.bank)} | Diff: ${(r.diff > 0 ? '+' : '')}${formatCurrency(r.diff)}\n`;
   });
   text += `=========================================\n`;
   text += `NET DISCREPANCY: ${formatCurrency(result.netDiscrepancy)} (${Math.abs(result.netDiscrepancy) <= 0.005 ? 'Balanced' : 'Out of Balance'})\n`;

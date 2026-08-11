@@ -105,9 +105,6 @@
       </div>
       
       <div class="workspace-actions">
-        <button id="btn-sample-data" class="btn btn-secondary btn-sm">
-          <i data-lucide="table-properties"></i> Load Weekend Example
-        </button>
         <button type="button" class="btn btn-secondary btn-sm admin-only" id="btn-settings-toggle">
           <i data-lucide="settings"></i> User Management
         </button>
@@ -179,15 +176,15 @@
       <section class="form-section">
         <form id="reconcile-form">
           
-          <!-- Section: Dynamic Trial Balance (CB Ledger) -->
+          <!-- Section 1: Hotel Trial Balance (Col C) -->
           <div class="card inputs-card tb-card">
             <div class="card-header-flex">
               <div class="card-header-title-area">
                 <h3 class="card-title"><i data-lucide="receipt"></i> Hotel Trial Balance (Col C)</h3>
-                <p class="card-subtitle" id="tb-badge-title">CB Ledger Receipts</p>
+                <p class="card-subtitle">CB Ledger Receipts - Hotel</p>
               </div>
               <div class="card-actions">
-                <button type="button" class="btn btn-sm btn-secondary" id="btn-add-tb-col">
+                <button type="button" class="btn btn-sm btn-secondary" id="btn-add-hotel-col">
                   <i data-lucide="plus"></i> Add TB Day
                 </button>
               </div>
@@ -195,13 +192,42 @@
             
             <div class="spreadsheet-container">
               <!-- Sticky Labels Column on Left (Dynamic) -->
-              <div id="tb-labels-container" class="spreadsheet-labels">
+              <div id="hotel-labels-container" class="spreadsheet-labels">
                 <!-- Injected dynamically by JS -->
               </div>
               
               <!-- Scrolling Columns Container (Dynamic) -->
               <div class="spreadsheet-scroll-area">
-                <div id="tb-columns-container" class="spreadsheet-columns-container">
+                <div id="hotel-columns-container" class="spreadsheet-columns-container">
+                  <!-- Dynamic columns of inputs injected here by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Restaurant Trial Balance (Col C) -->
+          <div class="card inputs-card tb-card" style="margin-top: 1rem;">
+            <div class="card-header-flex">
+              <div class="card-header-title-area">
+                <h3 class="card-title"><i data-lucide="utensils"></i> Restaurant Trial Balance (Col C)</h3>
+                <p class="card-subtitle">CB Ledger Receipts - Restaurant</p>
+              </div>
+              <div class="card-actions">
+                <button type="button" class="btn btn-sm btn-secondary" id="btn-add-restaurant-col">
+                  <i data-lucide="plus"></i> Add TB Day
+                </button>
+              </div>
+            </div>
+            
+            <div class="spreadsheet-container">
+              <!-- Sticky Labels Column on Left (Dynamic) -->
+              <div id="restaurant-labels-container" class="spreadsheet-labels">
+                <!-- Injected dynamically by JS -->
+              </div>
+              
+              <!-- Scrolling Columns Container (Dynamic) -->
+              <div class="spreadsheet-scroll-area">
+                <div id="restaurant-columns-container" class="spreadsheet-columns-container">
                   <!-- Dynamic columns of inputs injected here by JS -->
                 </div>
               </div>
@@ -209,7 +235,7 @@
           </div>
 
           <!-- Section: Bank Statement Amounts (Dynamic) -->
-          <div class="card inputs-card bank-card">
+          <div class="card inputs-card bank-card" style="margin-top: 1rem;">
             <div class="card-header-flex">
               <h3 class="card-title"><i data-lucide="building-2"></i> Bank Statement (Col I)</h3>
               <span class="badge badge-purple" id="bank-badge-title">Bank Settled</span>
@@ -220,7 +246,7 @@
             </div>
           </div>
           
-          <div class="action-buttons">
+          <div class="action-buttons" style="margin-top: 1rem;">
             <button type="submit" class="btn btn-primary" id="btn-save">
               <i data-lucide="save"></i> Save Report
             </button>
