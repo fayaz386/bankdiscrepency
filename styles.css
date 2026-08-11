@@ -1197,10 +1197,16 @@ body.light-theme .company-tab:hover {
   background-color: rgba(0, 0, 0, 0.02);
 }
 
-.company-tab.active {
+.company-tab[data-company="ws_hospitality"].active {
   color: #ffffff;
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+  background: #f97316;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.35);
+}
+
+.company-tab[data-company="ws_hotels"].active {
+  color: #ffffff;
+  background: #0ea5e9;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35);
 }
 
 /* Secondary Sub-Tabs Navigation */
@@ -1548,20 +1554,16 @@ body.light-theme .cat-header-spacer {
   display: inline-flex;
   align-items: center;
   gap: 16px;
-  background-color: rgba(59, 130, 246, 0.15);
-  border: 3px solid var(--accent-blue);
   border-radius: var(--border-radius-lg);
   padding: 14px 28px;
   font-size: 1.35rem;
   color: var(--text-secondary);
   margin-bottom: 1.25rem;
   width: fit-content;
-  box-shadow: 0 0 25px rgba(59, 130, 246, 0.35);
   transition: var(--transition-all);
 }
 .active-company-indicator strong {
   color: #ffffff;
-  background-color: var(--accent-blue);
   padding: 6px 16px;
   border-radius: var(--border-radius-sm);
   font-size: 1.65rem;
@@ -1572,7 +1574,32 @@ body.light-theme .cat-header-spacer {
 .active-company-indicator i {
   width: 32px;
   height: 32px;
-  color: var(--accent-blue);
+}
+
+/* Orange/Hospitality indicators style */
+.active-company-indicator.indicator-orange {
+  background-color: rgba(249, 115, 22, 0.15);
+  border: 3px solid #f97316;
+  box-shadow: 0 0 25px rgba(249, 115, 22, 0.35);
+}
+.active-company-indicator.indicator-orange strong {
+  background-color: #f97316;
+}
+.active-company-indicator.indicator-orange i {
+  color: #f97316;
+}
+
+/* Blue/Hotel indicators style */
+.active-company-indicator.indicator-blue {
+  background-color: rgba(14, 165, 233, 0.15);
+  border: 3px solid #0ea5e9;
+  box-shadow: 0 0 25px rgba(14, 165, 233, 0.35);
+}
+.active-company-indicator.indicator-blue strong {
+  background-color: #0ea5e9;
+}
+.active-company-indicator.indicator-blue i {
+  color: #0ea5e9;
 }
 
 /* Compact Bank Statement entries */

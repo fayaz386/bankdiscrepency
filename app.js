@@ -478,7 +478,14 @@ function setupNavigationTabs() {
       const compName = activeCompany === 'ws_hospitality' ? 'WS Hospitality' : 'WS Hotels';
       const companyIndicator = document.getElementById('active-company-indicator');
       if (companyIndicator) {
-        companyIndicator.innerHTML = `<i data-lucide="building"></i> Active Workspace: <strong>${compName}</strong>`;
+        companyIndicator.className = 'active-company-indicator';
+        if (activeCompany === 'ws_hospitality') {
+          companyIndicator.classList.add('indicator-orange');
+          companyIndicator.innerHTML = `<i data-lucide="building"></i> Active Workspace: <strong>${compName}</strong>`;
+        } else {
+          companyIndicator.classList.add('indicator-blue');
+          companyIndicator.innerHTML = `<i data-lucide="hotel"></i> Active Workspace: <strong>${compName}</strong>`;
+        }
       }
       lucide.createIcons();
 
@@ -2036,9 +2043,16 @@ function toggleWorkspaceView(mode) {
     if (companyIndicator) {
       companyIndicator.style.display = '';
       companyIndicator.classList.remove('hidden');
+      companyIndicator.className = 'active-company-indicator';
       
       const compName = activeCompany === 'ws_hospitality' ? 'WS Hospitality' : 'WS Hotels';
-      companyIndicator.innerHTML = `<i data-lucide="building"></i> Active Workspace: <strong>${compName}</strong>`;
+      if (activeCompany === 'ws_hospitality') {
+        companyIndicator.classList.add('indicator-orange');
+        companyIndicator.innerHTML = `<i data-lucide="building"></i> Active Workspace: <strong>${compName}</strong>`;
+      } else {
+        companyIndicator.classList.add('indicator-blue');
+        companyIndicator.innerHTML = `<i data-lucide="hotel"></i> Active Workspace: <strong>${compName}</strong>`;
+      }
     }
     
     if (companyTabsContainer) {
@@ -2092,10 +2106,11 @@ window.loadLiveStatusBoard = function() {
         header.style.borderBottom = '2px solid var(--border-color)';
         header.style.paddingBottom = '8px';
         header.style.marginBottom = '4px';
+        const accentColor = company.id === 'ws_hospitality' ? '#f97316' : '#0ea5e9';
         header.innerHTML = `
-          <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-            <i data-lucide="${company.icon}" style="color: var(--accent-blue); width: 18px; height: 18px;"></i>
-            ${company.title}
+          <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="${company.icon}" style="color: ${accentColor}; width: 18px; height: 18px;"></i>
+            <span style="color: ${accentColor};">${company.title}</span>
           </h3>
         `;
         companyCard.appendChild(header);
