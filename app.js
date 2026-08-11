@@ -1,7 +1,7 @@
 /**
  * ReconcileFlow - Frontend Core Application (Enhanced)
  * Supports Multi-Company workspaces, AMEX sub-tabs, user authentication, and admin settings.
- * Includes separate Hotel and Restaurant Trial Balance grids, and multiple AMEX bank postings.
+ * Includes separate Hotel and Restaurant Trial Balance grids, and dynamic multiple bank statement postings per card.
  */
 
 // --- CATEGORY CONFIGURATIONS ---
@@ -21,14 +21,6 @@ const AMEX_ROWS = [
   { id: 'amexpos', name: 'AMEX POS' }
 ];
 
-const CARD_BANK_INPUTS = [
-  { id: 'visa', name: 'Visa Settled' },
-  { id: 'mc', name: 'MasterCard (MC) Settled' },
-  { id: 'discover', name: 'Discover Settled' },
-  { id: 'debit1', name: 'Debit 1 Settled' },
-  { id: 'debit2', name: 'Debit 2 Settled' }
-];
-
 // --- APP STATE ---
 let currentUser = null;
 let activeCompany = 'ws_hospitality';
@@ -38,8 +30,15 @@ let activeTab = 'cards';
 let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa: 0, mc: 0... } }]
 let restaurantColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa: 0, mc: 0... } }]
 
-// AMEX Bank Statement Postings
-let amexBankPostings = [{ id: 1, value: '' }];
+// Dynamic Bank Statement Postings per Card
+let bankPostings = {
+  visa: [{ id: 'visa_init', value: '' }],
+  mc: [{ id: 'mc_init', value: '' }],
+  discover: [{ id: 'discover_init', value: '' }],
+  debit1: [{ id: 'debit1_init', value: '' }],
+  debit2: [{ id: 'debit2_init', value: '' }],
+  amex: [{ id: 'amex_init', value: '' }]
+};
 
 let history = []; // Array of saved reconciliation reports
 let trendChart = null;
@@ -303,7 +302,6 @@ function loadUsersDirectory() {
         const roleLabel = u.role === 'admin' ? 'Administrator' : 'Standard User';
         
         let actionsHtml = '';
-        // Change password key button
         actionsHtml += `<button class="btn-table-action" onclick="changeUserPassword('${u.username}')" title="Change Password"><i data-lucide="key"></i></button>`;
         
         if (u.username.toLowerCase() !== 'admin') {
@@ -409,7 +407,6 @@ window.changeUserPassword = function(username) {
 // --- DYNAMIC SHEETS AND NAVIGATION TABS ---
 
 function setupNavigationTabs() {
-  // Company Switchers
   const compButtons = companyTabsContainer.querySelectorAll('.company-tab');
   compButtons.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -424,7 +421,6 @@ function setupNavigationTabs() {
     });
   });
 
-  // Card vs AMEX Sub-Tabs Switchers
   const subButtons = subTabsContainer.querySelectorAll('.sub-tab');
   subButtons.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -443,21 +439,26 @@ function resetAppInputs() {
   hotelColumns = [];
   restaurantColumns = [];
   
+  const seed = Date.now();
+  bankPostings = {
+    visa: [{ id: `visa_${seed}_0`, value: '' }],
+    mc: [{ id: `mc_${seed}_0`, value: '' }],
+    discover: [{ id: `discover_${seed}_0`, value: '' }],
+    debit1: [{ id: `debit1_${seed}_0`, value: '' }],
+    debit2: [{ id: `debit2_${seed}_0`, value: '' }],
+    amex: [{ id: `amex_${seed}_0`, value: '' }]
+  };
+  
   if (activeTab === 'cards') {
     bankBadgeTitle.textContent = "Bank Settled (Visa/MC/Discover/Debit)";
   } else {
     bankBadgeTitle.textContent = "Bank Settled (AMEX)";
-    amexBankPostings = [{ id: Date.now(), value: '' }];
   }
   
-  // Render Labels
   renderTbLabels(hotelLabelsContainer);
   renderTbLabels(restaurantLabelsContainer);
-
-  // Render Bank Form
   renderBankInputsList();
   
-  // Initialize with 1 blank column each
   addTbColumn(true);
   addTbColumn(false);
 
@@ -487,8 +488,9 @@ function renderBankInputsList() {
   // Render Bank Date input row
   const dateRow = document.createElement('div');
   dateRow.className = 'bank-input-row';
+  dateRow.style.marginBottom = '16px';
   dateRow.innerHTML = `
-    <label for="bank-date">Bank Date</label>
+    <label for="bank-date" style="font-weight: 700;">Bank Date</label>
     <input type="date" id="bank-date" required>
   `;
   bankInputsContainer.appendChild(dateRow);
@@ -497,88 +499,98 @@ function renderBankInputsList() {
   bankDateInput.value = formatDate(new Date());
   bankDateInput.addEventListener('change', calculateReconciliation);
 
-  if (activeTab === 'cards') {
-    // Normal Cards list
-    CARD_BANK_INPUTS.forEach(inp => {
-      const inputRow = document.createElement('div');
-      inputRow.className = 'bank-input-row';
-      inputRow.innerHTML = `
-        <label for="bank-${inp.id}">${inp.name}</label>
-        <div class="input-prefix">
-          <span>$</span>
-          <input type="number" id="bank-${inp.id}" step="0.01" placeholder="0.00">
+  // Render bank categories dynamically with sub-postings
+  const categories = activeTab === 'cards' 
+    ? [
+        { id: 'visa', name: 'Visa Settled' },
+        { id: 'mc', name: 'MasterCard (MC) Settled' },
+        { id: 'discover', name: 'Discover Settled' },
+        { id: 'debit1', name: 'Debit 1 Settled' },
+        { id: 'debit2', name: 'Debit 2 Settled' }
+      ]
+    : [
+        { id: 'amex', name: 'AMEX Settled' }
+      ];
+
+  categories.forEach(cat => {
+    const catBlock = document.createElement('div');
+    catBlock.className = 'bank-cat-block';
+    catBlock.style.borderBottom = '1px solid var(--border-color)';
+    catBlock.style.paddingBottom = '12px';
+    catBlock.style.marginBottom = '12px';
+
+    const catHeader = document.createElement('div');
+    catHeader.style.display = 'flex';
+    catHeader.style.justifyContent = 'space-between';
+    catHeader.style.alignItems = 'center';
+    catHeader.style.marginBottom = '8px';
+    catHeader.innerHTML = `
+      <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);">${cat.name}</span>
+      <button type="button" class="btn btn-outline btn-sm" onclick="addBankPostingRow('${cat.id}')" style="padding: 3px 8px; font-size: 0.75rem;">
+        <i data-lucide="plus" style="width: 12px; height: 12px;"></i> Add Line
+      </button>
+    `;
+    catBlock.appendChild(catHeader);
+
+    // List of posting rows
+    const postings = bankPostings[cat.id] || [];
+    postings.forEach((post, index) => {
+      const row = document.createElement('div');
+      row.className = 'bank-input-row';
+      row.style.marginBottom = '6px';
+      
+      let deleteBtnHtml = '';
+      if (postings.length > 1) {
+        deleteBtnHtml = `
+          <button type="button" class="btn-del-col" style="margin-left: 8px;" onclick="deleteBankPostingRow('${cat.id}', '${post.id}')" title="Delete Line">
+            <i data-lucide="trash-2"></i>
+          </button>
+        `;
+      }
+
+      row.innerHTML = `
+        <label style="font-weight: normal; font-size: 0.75rem; color: var(--text-muted); padding-left: 8px;">Line #${index + 1}</label>
+        <div style="display: flex; align-items: center; width: 100%;">
+          <div class="input-prefix" style="flex: 1;">
+            <span>$</span>
+            <input type="number" id="bank-post-${post.id}" step="0.01" placeholder="0.00" value="${post.value}">
+          </div>
+          ${deleteBtnHtml}
         </div>
       `;
-      bankInputsContainer.appendChild(inputRow);
-      
-      const inputField = document.getElementById(`bank-${inp.id}`);
-      inputField.addEventListener('input', calculateReconciliation);
+      catBlock.appendChild(row);
+
+      const inputField = document.getElementById(`bank-post-${post.id}`);
+      inputField.addEventListener('input', (e) => {
+        post.value = e.target.value === '' ? '' : parseFloat(e.target.value);
+        calculateReconciliation();
+      });
     });
-  } else {
-    // AMEX Multiple Postings List
-    renderAmexPostingsList();
-  }
-}
 
-function renderAmexPostingsList() {
-  // Remove any existing AMEX posting rows or add button first
-  const existingRows = bankInputsContainer.querySelectorAll('.amex-posting-row');
-  existingRows.forEach(r => r.remove());
-  const existingBtn = document.getElementById('btn-add-amex-posting');
-  if (existingBtn) existingBtn.remove();
-
-  amexBankPostings.forEach((post, index) => {
-    const row = document.createElement('div');
-    row.className = 'bank-input-row amex-posting-row';
-    
-    let deleteBtnHtml = '';
-    if (amexBankPostings.length > 1) {
-      deleteBtnHtml = `<button type="button" class="btn-del-col" style="margin-left: 8px" onclick="deleteAmexPosting(${post.id})" title="Delete Posting"><i data-lucide="trash-2"></i></button>`;
-    }
-
-    row.innerHTML = `
-      <label for="bank-amex-${post.id}">AMEX Posting #${index + 1}</label>
-      <div style="display: flex; align-items: center; width: 100%;">
-        <div class="input-prefix" style="flex: 1;">
-          <span>$</span>
-          <input type="number" id="bank-amex-${post.id}" step="0.01" placeholder="0.00" value="${post.value}">
-        </div>
-        ${deleteBtnHtml}
-      </div>
-    `;
-    bankInputsContainer.appendChild(row);
-
-    const inputField = document.getElementById(`bank-amex-${post.id}`);
-    inputField.addEventListener('input', (e) => {
-      post.value = e.target.value === '' ? '' : parseFloat(e.target.value);
-      calculateReconciliation();
-    });
+    bankInputsContainer.appendChild(catBlock);
   });
 
-  // Append Add Button
-  const addBtn = document.createElement('button');
-  addBtn.type = 'button';
-  addBtn.className = 'btn btn-sm btn-secondary';
-  addBtn.id = 'btn-add-amex-posting';
-  addBtn.style.width = '100%';
-  addBtn.style.marginTop = '10px';
-  addBtn.innerHTML = `<i data-lucide="plus"></i> Add AMEX Posting`;
-  addBtn.addEventListener('click', addAmexPosting);
-  
-  bankInputsContainer.appendChild(addBtn);
+  if (bankInputsContainer.lastChild) {
+    bankInputsContainer.lastChild.style.borderBottom = 'none';
+    bankInputsContainer.lastChild.style.paddingBottom = '0';
+    bankInputsContainer.lastChild.style.marginBottom = '0';
+  }
+
   lucide.createIcons();
 }
 
-function addAmexPosting() {
-  amexBankPostings.push({ id: Date.now(), value: '' });
-  renderAmexPostingsList();
+window.addBankPostingRow = function(catId) {
+  if (!bankPostings[catId]) bankPostings[catId] = [];
+  const seed = Date.now();
+  bankPostings[catId].push({ id: `${catId}_${seed}_${bankPostings[catId].length}`, value: '' });
+  renderBankInputsList();
   calculateReconciliation();
-}
+};
 
-window.deleteAmexPosting = function(id) {
-  if (amexBankPostings.length <= 1) return;
-  amexBankPostings = amexBankPostings.filter(p => p.id !== id);
-  renderAmexPostingsList();
+window.deleteBankPostingRow = function(catId, postId) {
+  if (!bankPostings[catId] || bankPostings[catId].length <= 1) return;
+  bankPostings[catId] = bankPostings[catId].filter(p => p.id !== postId);
+  renderBankInputsList();
   calculateReconciliation();
 };
 
@@ -709,20 +721,16 @@ function runReconciliationLogic() {
     netDiscrepancy: 0
   };
 
-  // 1. Gather Bank Statement Inputs
-  if (activeTab === 'cards') {
-    CARD_BANK_INPUTS.forEach(inp => {
-      const el = document.getElementById(`bank-${inp.id}`);
-      result.bank[inp.id] = el && el.value !== '' ? parseFloat(el.value) : 0;
+  // 1. Gather Bank Statement Inputs (summing across postings arrays)
+  const activeKeys = activeTab === 'cards' ? ['visa', 'mc', 'discover', 'debit1', 'debit2'] : ['amex'];
+  activeKeys.forEach(key => {
+    let sum = 0;
+    const postings = bankPostings[key] || [];
+    postings.forEach(p => {
+      if (typeof p.value === 'number') sum += p.value;
     });
-  } else {
-    // Sum of all AMEX postings
-    let totalAmexBank = 0;
-    amexBankPostings.forEach(p => {
-      if (typeof p.value === 'number') totalAmexBank += p.value;
-    });
-    result.bank['amex'] = totalAmexBank;
-  }
+    result.bank[key] = sum;
+  });
 
   // 2. Sum Trial Balance categories (Combined Hotel + Restaurant)
   const rows = activeTab === 'cards' ? CARD_ROWS : AMEX_ROWS;
@@ -890,9 +898,8 @@ function handleSaveReport(e) {
 
   const calculation = runReconciliationLogic();
 
-  // Create range label for history (e.g. "Aug 4 - Aug 6")
+  // Create range label for history
   let tbDateLabel = '';
-  // Combine all sorted dates
   const allDates = [...hotelColumns, ...restaurantColumns].map(c => c.date).sort();
   const sortedUniqueDates = [...new Set(allDates)];
   if (sortedUniqueDates.length === 1) {
@@ -914,12 +921,10 @@ function handleSaveReport(e) {
     tbDateLabel,
     primaryTbDate: primaryDate,
     bankDate,
-    // Store Hotel and Restaurant columns separately
     hotelColumns: JSON.parse(JSON.stringify(hotelColumns)),
     restaurantColumns: JSON.parse(JSON.stringify(restaurantColumns)),
-    // Store AMEX postings if active
-    amexBankPostings: activeTab === 'amex' ? JSON.parse(JSON.stringify(amexBankPostings)) : null,
-    bank: calculation.bank,
+    bankPostings: JSON.parse(JSON.stringify(bankPostings)), // Store entire structured bank list
+    bank: calculation.bank, // Flattened sums for backward compatibility
     totalLedger: calculation.totalLedger,
     totalBank: calculation.totalBank,
     netDiscrepancy: calculation.netDiscrepancy,
@@ -987,15 +992,7 @@ window.editReportRecord = function(id) {
       bankBadgeTitle.textContent = "Bank Settled (AMEX)";
     }
 
-    renderTbLabels(hotelLabelsContainer);
-    renderTbLabels(restaurantLabelsContainer);
-    renderBankInputsList();
-
-    const bankDateInput = document.getElementById('bank-date');
-    if (bankDateInput) bankDateInput.value = report.bankDate;
-
-    // Load grids state (Hotel & Restaurant)
-    // Back-compatibility: if report has old tbColumns, load it to hotelColumns, and keep restaurantColumns blank
+    // Load grids state
     if (report.hotelColumns) {
       hotelColumns = JSON.parse(JSON.stringify(report.hotelColumns));
       restaurantColumns = JSON.parse(JSON.stringify(report.restaurantColumns || []));
@@ -1007,24 +1004,41 @@ window.editReportRecord = function(id) {
       restaurantColumns = [];
     }
 
+    renderTbLabels(hotelLabelsContainer);
+    renderTbLabels(restaurantLabelsContainer);
+
     renderGridColumns(hotelColumnsContainer, hotelColumns, true);
     renderGridColumns(restaurantColumnsContainer, restaurantColumns, false);
 
-    // Load AMEX postings or Card inputs
-    if (activeTab === 'cards') {
-      CARD_BANK_INPUTS.forEach(inp => {
-        const input = document.getElementById(`bank-${inp.id}`);
-        if (input) input.value = report.bank[inp.id] || '';
-      });
+    const bankDateInput = document.getElementById('bank-date');
+    if (bankDateInput) bankDateInput.value = report.bankDate;
+
+    // Load bank postings with backward compatibility
+    if (report.bankPostings) {
+      bankPostings = JSON.parse(JSON.stringify(report.bankPostings));
+    } else if (report.bank) {
+      // Map flat key-value report to structured array list
+      bankPostings = {
+        visa: [{ id: 'visa_loaded', value: report.bank['visa'] || '' }],
+        mc: [{ id: 'mc_loaded', value: report.bank['mc'] || '' }],
+        discover: [{ id: 'discover_loaded', value: report.bank['discover'] || '' }],
+        debit1: [{ id: 'debit1_loaded', value: report.bank['debit1'] || '' }],
+        debit2: [{ id: 'debit2_loaded', value: report.bank['debit2'] || '' }],
+        amex: [{ id: 'amex_loaded', value: report.bank['amex'] || '' }]
+      };
     } else {
-      // Load saved AMEX postings list
-      if (report.amexBankPostings) {
-        amexBankPostings = JSON.parse(JSON.stringify(report.amexBankPostings));
-      } else {
-        amexBankPostings = [{ id: Date.now(), value: report.bank['amex'] || '' }];
-      }
-      renderAmexPostingsList();
+      const seed = Date.now();
+      bankPostings = {
+        visa: [{ id: `visa_${seed}`, value: '' }],
+        mc: [{ id: `mc_${seed}`, value: '' }],
+        discover: [{ id: `discover_${seed}`, value: '' }],
+        debit1: [{ id: `debit1_${seed}`, value: '' }],
+        debit2: [{ id: `debit2_${seed}`, value: '' }],
+        amex: [{ id: `amex_${seed}`, value: '' }]
+      };
     }
+
+    renderBankInputsList();
 
     calculateReconciliation();
     toggleSettingsView(false);
@@ -1238,9 +1252,9 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
 
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(11);
-  doc.text(`Bank Statement Date: ${bankDateStr}`, 14, 28);
-  doc.text(`Trial Balance Range: ${tbDatesStr}`, 14, 34);
-  doc.text(`Report Generated: ${new Date().toLocaleString()}`, 140, 28);
+  doc.text("Bank Statement Date: " + bankDateStr, 14, 28);
+  doc.text("Trial Balance Range: " + tbDatesStr, 14, 34);
+  doc.text("Report Generated: " + new Date().toLocaleString(), 140, 28);
 
   doc.setDrawColor(226, 232, 240);
   doc.line(14, 38, 196, 38);
@@ -1313,8 +1327,8 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
 
   doc.setFont("Helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(`Total Ledger Receipts: ${formatCurrency(result.totalLedger)}`, 20, currentY + 18);
-  doc.text(`Total Bank Deposits:   ${formatCurrency(result.totalBank)}`, 20, currentY + 26);
+  doc.text("Total Ledger Receipts: " + formatCurrency(result.totalLedger), 20, currentY + 18);
+  doc.text("Total Bank Deposits:   " + formatCurrency(result.totalBank), 20, currentY + 26);
 
   if (Math.abs(result.netDiscrepancy) <= 0.005) {
     doc.setFillColor(209, 250, 229);
@@ -1331,7 +1345,7 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
     doc.setTextColor(220, 38, 38);
     doc.text("OUT OF BALANCE", 128, currentY + 15);
     doc.setFontSize(9);
-    doc.text(`Difference: ${formatCurrency(result.netDiscrepancy)}`, 132, currentY + 21);
+    doc.text("Difference: " + formatCurrency(result.netDiscrepancy), 132, currentY + 21);
   }
 
   doc.setTextColor(148, 163, 184);
@@ -1348,7 +1362,6 @@ function downloadCurrentReportPDF() {
     return;
   }
 
-  // Combine dates
   const allDates = [...hotelColumns, ...restaurantColumns].map(c => c.date).sort();
   const sortedUniqueDates = [...new Set(allDates)];
   let rangeLabel = sortedUniqueDates[0];
@@ -1387,18 +1400,16 @@ function exportReportToPDF(id) {
 
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(11);
-  doc.text(`Bank Statement Date: ${report.bankDate}`, 14, 28);
-  doc.text(`Trial Balance Range: ${report.tbDateLabel}`, 14, 34);
-  doc.text(`Saved Date: ${new Date(report.timestamp).toLocaleString()}`, 130, 28);
+  doc.text("Bank Statement Date: " + report.bankDate, 14, 28);
+  doc.text("Trial Balance Range: " + report.tbDateLabel, 14, 34);
+  doc.text("Saved Date: " + new Date(report.timestamp).toLocaleString(), 130, 28);
 
   doc.setDrawColor(226, 232, 240);
   doc.line(14, 38, 196, 38);
 
-  // Recalculate sums
   const breakdownHeaders = [["Reconciliation Category", "Ledger Total (CB)", "Bank Statement", "Discrepancy", "Status"]];
   const breakdownRows = [];
   
-  // Calculate sums from saved grids
   const tbSums = {};
   const rows = isCards ? CARD_ROWS : AMEX_ROWS;
   rows.forEach(r => {
@@ -1486,8 +1497,8 @@ function exportReportToPDF(id) {
 
   doc.setFont("Helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(`Total Ledger Receipts: ${formatCurrency(report.totalLedger)}`, 20, currentY + 18);
-  doc.text(`Total Bank Deposits:   ${formatCurrency(report.totalBank)}`, 20, currentY + 26);
+  doc.text("Total Ledger Receipts: " + formatCurrency(report.totalLedger), 20, currentY + 18);
+  doc.text("Total Bank Deposits:   " + formatCurrency(report.totalBank), 20, currentY + 26);
 
   if (Math.abs(report.netDiscrepancy) <= 0.005) {
     doc.setFillColor(209, 250, 229);
@@ -1504,7 +1515,7 @@ function exportReportToPDF(id) {
     doc.setTextColor(220, 38, 38);
     doc.text("OUT OF BALANCE", 128, currentY + 15);
     doc.setFontSize(9);
-    doc.text(`Difference: ${formatCurrency(report.netDiscrepancy)}`, 132, currentY + 21);
+    doc.text("Difference: " + formatCurrency(report.netDiscrepancy), 132, currentY + 21);
   }
 
   const compFileStr = report.companyId === 'ws_hospitality' ? 'WS_Hospitality' : 'WS_Hotels';
@@ -1535,13 +1546,13 @@ function downloadSummaryPDF() {
 
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(11);
-  doc.text(`Company Name: ${companyName}`, 14, 28);
-  doc.text(`Recon Type: ${tabName} Accounts`, 14, 34);
-  doc.text(`Generated: ${new Date().toLocaleString()}`, 130, 28);
+  doc.text("Company Name: " + companyName, 14, 28);
+  doc.text("Recon Type: " + tabName + " Accounts", 14, 34);
+  doc.text("Generated: " + new Date().toLocaleString(), 130, 28);
 
   const fromVal = historyFromDate.value || 'Beginning';
   const toVal = historyToDate.value || 'Today';
-  doc.text(`Date Filters: ${fromVal} to ${toVal}`, 14, 40);
+  doc.text("Date Filters: " + fromVal + " to " + toVal, 14, 40);
 
   doc.setDrawColor(226, 232, 240);
   doc.line(14, 44, 196, 44);
@@ -1605,7 +1616,7 @@ function downloadSummaryPDF() {
   });
 
   const compFileStr = activeCompany === 'ws_hospitality' ? 'WS_Hospitality' : 'WS_Hotels';
-  doc.save(`Reconciliation_Summary_${compFileStr}_${tabName}_${formatDate(new Date())}.pdf`);
+  doc.save("Reconciliation_Summary_" + compFileStr + "_" + tabName + "_" + formatDate(new Date()) + ".pdf");
   showToast('PDF Summary Report downloaded!', 'success');
 }
 
@@ -1682,7 +1693,7 @@ function copySummaryToClipboard() {
   text += `Bank Statement Date: ${document.getElementById('bank-date').value}\n`;
   text += `=========================================\n`;
   result.rows.forEach(r => {
-    text += `${r.name}: Ledger Total ${formatCurrency(r.ledger)} | Bank ${formatCurrency(r.bank)} | Diff: ${(r.diff > 0 ? '+' : '')}${formatCurrency(r.diff)}\n`;
+    text += `${r.name}: Ledger Total ${formatCurrency(r.ledger)} | Bank Total ${formatCurrency(r.bank)} | Diff: ${(r.diff > 0 ? '+' : '')}${formatCurrency(r.diff)}\n`;
   });
   text += `=========================================\n`;
   text += `NET DISCREPANCY: ${formatCurrency(result.netDiscrepancy)} (${Math.abs(result.netDiscrepancy) <= 0.005 ? 'Balanced' : 'Out of Balance'})\n`;
