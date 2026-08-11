@@ -2,10 +2,13 @@
   "name": "bank-reconciliation-report",
   "version": "1.0.0",
   "description": "Daily Bank Discrepancy Reconciliation Web Application",
-  "main": "index.html",
+  "main": "server.js",
   "scripts": {
-    "dev": "npx -y http-server . -p 3000",
-    "start": "npx -y http-server . -p 3000"
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
   },
   "keywords": [
     "reconciliation",

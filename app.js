@@ -410,15 +410,20 @@ function calculateReconciliation() {
 // --- DATABASE PERSISTENCE ---
 
 function loadLocalStorage() {
-  const data = localStorage.getItem('reconciliation_history_v2');
-  history = data ? JSON.parse(data) : [];
-  renderHistoryTable();
-}
-
-function saveToLocalStorage() {
-  localStorage.setItem('reconciliation_history_v2', JSON.stringify(history));
-  renderHistoryTable();
-  updateChart();
+  fetch('/api/history')
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to load history');
+      return res.json();
+    })
+    .then(data => {
+      history = data || [];
+      renderHistoryTable();
+      updateChart();
+    })
+    .catch(err => {
+      console.error("Failed to load history from server: ", err);
+      showToast("Error loading history from server", "error");
+    });
 }
 
 function handleSaveReport(e) {
@@ -468,26 +473,47 @@ function handleSaveReport(e) {
     timestamp: new Date().getTime()
   };
 
-  const index = history.findIndex(r => r.id === reportId);
-  if (index !== -1) {
-    history[index] = report;
-    showToast(`Updated reconciliation report for Bank date ${bankDate}.`, 'success');
-  } else {
-    history.push(report);
-    showToast(`Saved report for Bank date ${bankDate} successfully!`, 'success');
-  }
+  showToast('Saving report to server...', 'info');
 
-  // Sort history by Bank Date
-  history.sort((a, b) => new Date(a.bankDate) - new Date(b.bankDate));
-
-  saveToLocalStorage();
+  fetch('/api/history', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(report)
+  })
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to save');
+      return res.json();
+    })
+    .then(data => {
+      showToast(data.message || 'Report saved successfully!', 'success');
+      loadLocalStorage(); // Refresh list from server
+    })
+    .catch(err => {
+      console.error("Failed to save report: ", err);
+      showToast("Error saving report to server", "error");
+    });
 }
 
 function deleteReport(id) {
   if (confirm(`Delete reconciliation report for record ${id}?`)) {
-    history = history.filter(r => r.id !== id);
-    saveToLocalStorage();
-    showToast(`Deleted report.`, 'info');
+    showToast('Deleting report...', 'info');
+    fetch(`/api/history/${id}`, {
+      method: 'DELETE'
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to delete');
+        return res.json();
+      })
+      .then(data => {
+        showToast(data.message || 'Report deleted.', 'success');
+        loadLocalStorage(); // Refresh list from server
+      })
+      .catch(err => {
+        console.error("Failed to delete report: ", err);
+        showToast("Error deleting report from server", "error");
+      });
   }
 }
 
