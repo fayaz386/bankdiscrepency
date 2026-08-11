@@ -2,6 +2,7 @@
  * ReconcileFlow - Frontend Core Application (Enhanced)
  * Supports Multi-Company workspaces, AMEX sub-tabs, user authentication, and admin settings.
  * Includes separate Hotel and Restaurant Trial Balance grids, and dynamic multiple bank statement postings per card.
+ * Supports Excel-style math additions (e.g. 100+200+50) inside any cell.
  */
 
 // --- CATEGORY CONFIGURATIONS ---
@@ -27,8 +28,8 @@ let activeCompany = 'ws_hospitality';
 let activeTab = 'cards';
 
 // Separate Grid States
-let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa: 0, mc: 0... } }]
-let restaurantColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa: 0, mc: 0... } }]
+let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa: '', mc: ''... } }]
+let restaurantColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa: '', mc: ''... } }]
 
 // Dynamic Bank Statement Postings per Card
 let bankPostings = {
@@ -182,6 +183,26 @@ document.addEventListener('DOMContentLoaded', () => {
   initChart();
   lucide.createIcons();
 });
+
+// --- MATH PARSING FUNCTION (EXCEL-STYLE SUMMING) ---
+
+function parseMathExpression(val) {
+  if (val === undefined || val === null || val === '') return 0;
+  if (typeof val === 'number') return val;
+  
+  // Split the string by plus signs
+  const parts = val.toString().split('+');
+  let sum = 0;
+  parts.forEach(p => {
+    // Strip everything except digits and decimal dots
+    const cleaned = p.replace(/[^0-9.]/g, '');
+    const num = parseFloat(cleaned);
+    if (!isNaN(num)) {
+      sum += num;
+    }
+  });
+  return sum;
+}
 
 // --- SESSION & USER ACTIONS ---
 
@@ -553,7 +574,7 @@ function renderBankInputsList() {
         <div style="display: flex; align-items: center; width: 100%;">
           <div class="input-prefix" style="flex: 1;">
             <span>$</span>
-            <input type="number" id="bank-post-${post.id}" step="0.01" placeholder="0.00" value="${post.value}">
+            <input type="text" id="bank-post-${post.id}" placeholder="0.00" value="${post.value}">
           </div>
           ${deleteBtnHtml}
         </div>
@@ -562,7 +583,7 @@ function renderBankInputsList() {
 
       const inputField = document.getElementById(`bank-post-${post.id}`);
       inputField.addEventListener('input', (e) => {
-        post.value = e.target.value === '' ? '' : parseFloat(e.target.value);
+        post.value = e.target.value; // Store as text string directly to support math
         calculateReconciliation();
       });
     });
@@ -677,13 +698,12 @@ function renderGridColumns(container, colsArray, isHotel) {
       inputPrefix.appendChild(dollarSpan);
 
       const input = document.createElement('input');
-      input.type = 'number';
-      input.step = '0.01';
+      input.type = 'text'; // CHANGED from number to text to support math equations
       input.placeholder = '0.00';
       input.value = col.values[row.id];
       
       input.addEventListener('input', (e) => {
-        col.values[row.id] = e.target.value === '' ? '' : parseFloat(e.target.value);
+        col.values[row.id] = e.target.value; // Store raw text formula
         calculateReconciliation();
       });
 
@@ -704,9 +724,7 @@ function sumGridRow(cols, rowId) {
   let sum = 0;
   cols.forEach(col => {
     const val = col.values[rowId];
-    if (typeof val === 'number') {
-      sum += val;
-    }
+    sum += parseMathExpression(val);
   });
   return sum;
 }
@@ -727,7 +745,7 @@ function runReconciliationLogic() {
     let sum = 0;
     const postings = bankPostings[key] || [];
     postings.forEach(p => {
-      if (typeof p.value === 'number') sum += p.value;
+      sum += parseMathExpression(p.value);
     });
     result.bank[key] = sum;
   });
@@ -1520,6 +1538,7 @@ function exportReportToPDF(id) {
 
   const compFileStr = report.companyId === 'ws_hospitality' ? 'WS_Hospitality' : 'WS_Hotels';
   const tabName = report.reconType === 'cards' ? 'Cards' : 'AMEX';
+  doc.save(`Reconciliation_${compFileStr}_${tabName}_${report.bankDate}.pdf`);
   doc.save(`Reconciliation_${compFileStr}_${tabName}_${report.bankDate}.pdf`);
   showToast(`Archived PDF downloaded!`, 'success');
 }
