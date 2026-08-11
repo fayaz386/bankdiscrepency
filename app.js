@@ -581,7 +581,7 @@ function renderBankInputsList() {
       `;
       catBlock.appendChild(row);
 
-      const inputField = document.getElementById(`bank-post-${post.id}`);
+      const inputField = row.querySelector('input');
       inputField.addEventListener('input', (e) => {
         post.value = e.target.value; // Store as text string directly to support math
         calculateReconciliation();
