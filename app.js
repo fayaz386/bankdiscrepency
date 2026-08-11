@@ -3,6 +3,7 @@
  * Supports Multi-Company workspaces, AMEX sub-tabs, user authentication, and admin settings.
  * Includes separate Hotel and Restaurant Trial Balance grids, and dynamic multiple bank statement postings per card.
  * Supports Excel-style math additions (e.g. 100+200+50) inside any cell.
+ * Supports dynamic addition of multiple amount sub-lines under any Trial Balance category in both spreadsheets.
  */
 
 // --- CATEGORY CONFIGURATIONS ---
@@ -22,14 +23,38 @@ const AMEX_ROWS = [
   { id: 'amexpos', name: 'AMEX POS' }
 ];
 
+// Helper to get initial default categories (1 line per category)
+function getInitialCategories() {
+  return {
+    cards: {
+      visa: { name: 'Visa', lines: [{ id: 'visa_0', label: 'Line 1' }] },
+      mc: { name: 'MasterCard (MC)', lines: [{ id: 'mc_0', label: 'Line 1' }] },
+      discover: { name: 'Discover', lines: [{ id: 'discover_0', label: 'Line 1' }] },
+      debit1: { name: 'Debit 1', lines: [{ id: 'debit1_0', label: 'Line 1' }] },
+      debit2: { name: 'Debit 2', lines: [{ id: 'debit2_0', label: 'Line 1' }] },
+      visapos: { name: 'Visa POS', lines: [{ id: 'visapos_0', label: 'Line 1' }] },
+      mcpos: { name: 'MC POS', lines: [{ id: 'mcpos_0', label: 'Line 1' }] },
+      diner: { name: 'Diner', lines: [{ id: 'diner_0', label: 'Line 1' }] }
+    },
+    amex: {
+      amex: { name: 'AMEX', lines: [{ id: 'amex_0', label: 'Line 1' }] },
+      amexpos: { name: 'AMEX POS', lines: [{ id: 'amexpos_0', label: 'Line 1' }] }
+    }
+  };
+}
+
 // --- APP STATE ---
 let currentUser = null;
 let activeCompany = 'ws_hospitality';
 let activeTab = 'cards';
 
 // Separate Grid States
-let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa: '', mc: ''... } }]
-let restaurantColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa: '', mc: ''... } }]
+let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa_0: '', mc_0: ''... } }]
+let restaurantColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa_0: '', mc_0: ''... } }]
+
+// Dynamic Spreadsheet Categories Configuration
+let hotelCategories = getInitialCategories();
+let restaurantCategories = getInitialCategories();
 
 // Dynamic Bank Statement Postings per Card
 let bankPostings = {
@@ -190,11 +215,9 @@ function parseMathExpression(val) {
   if (val === undefined || val === null || val === '') return 0;
   if (typeof val === 'number') return val;
   
-  // Split the string by plus signs
   const parts = val.toString().split('+');
   let sum = 0;
   parts.forEach(p => {
-    // Strip everything except digits and decimal dots
     const cleaned = p.replace(/[^0-9.]/g, '');
     const num = parseFloat(cleaned);
     if (!isNaN(num)) {
@@ -460,6 +483,10 @@ function resetAppInputs() {
   hotelColumns = [];
   restaurantColumns = [];
   
+  // Reset dynamic categories to single-line default configurations
+  hotelCategories = getInitialCategories();
+  restaurantCategories = getInitialCategories();
+
   const seed = Date.now();
   bankPostings = {
     visa: [{ id: `visa_${seed}_0`, value: '' }],
@@ -476,8 +503,8 @@ function resetAppInputs() {
     bankBadgeTitle.textContent = "Bank Settled (AMEX)";
   }
   
-  renderTbLabels(hotelLabelsContainer);
-  renderTbLabels(restaurantLabelsContainer);
+  renderTbLabels(hotelLabelsContainer, true);
+  renderTbLabels(restaurantLabelsContainer, false);
   renderBankInputsList();
   
   addTbColumn(true);
@@ -486,7 +513,7 @@ function resetAppInputs() {
   calculateReconciliation();
 }
 
-function renderTbLabels(container) {
+function renderTbLabels(container, isHotel) {
   container.innerHTML = '';
   
   const headerCell = document.createElement('div');
@@ -494,14 +521,106 @@ function renderTbLabels(container) {
   headerCell.textContent = 'TB Date';
   container.appendChild(headerCell);
 
-  const rows = activeTab === 'cards' ? CARD_ROWS : AMEX_ROWS;
-  rows.forEach(row => {
-    const labelCell = document.createElement('div');
-    labelCell.className = 'sheet-label-cell';
-    labelCell.textContent = row.name;
-    container.appendChild(labelCell);
+  const catsObj = isHotel ? hotelCategories[activeTab] : restaurantCategories[activeTab];
+  Object.keys(catsObj).forEach(catId => {
+    const cat = catsObj[catId];
+    
+    // 1. Category Main Header row with dynamic "+ Add Line" button
+    const catHeaderCell = document.createElement('div');
+    catHeaderCell.className = 'sheet-label-cell cat-header-cell';
+    catHeaderCell.innerHTML = `
+      <span>${cat.name}</span>
+      <button type="button" class="btn-add-sub-line" onclick="addTbLine(${isHotel}, '${catId}')" title="Add Line">
+        <i data-lucide="plus"></i>
+      </button>
+    `;
+    container.appendChild(catHeaderCell);
+
+    // 2. Render individual dynamic sub-lines with trash delete buttons
+    cat.lines.forEach(line => {
+      const lineCell = document.createElement('div');
+      lineCell.className = 'sheet-label-cell';
+      lineCell.style.paddingLeft = '24px';
+      lineCell.style.display = 'flex';
+      lineCell.style.justifyContent = 'space-between';
+      lineCell.style.alignItems = 'center';
+      
+      let deleteBtnHtml = '';
+      if (cat.lines.length > 1) {
+        deleteBtnHtml = `
+          <button type="button" class="btn-del-col" onclick="deleteTbLine(${isHotel}, '${catId}', '${line.id}')" title="Delete Line" style="padding: 2px;">
+            <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
+          </button>
+        `;
+      }
+      
+      lineCell.innerHTML = `
+        <span style="font-weight: normal; font-size: 0.75rem; color: var(--text-secondary);">${line.label}</span>
+        ${deleteBtnHtml}
+      `;
+      container.appendChild(lineCell);
+    });
   });
+  
+  lucide.createIcons();
 }
+
+window.addTbLine = function(isHotel, catId) {
+  const cats = isHotel ? hotelCategories[activeTab] : restaurantCategories[activeTab];
+  const cat = cats[catId];
+  if (!cat) return;
+
+  const newId = `${catId}_${Date.now()}_${cat.lines.length}`;
+  cat.lines.push({
+    id: newId,
+    label: `Line ${cat.lines.length + 1}`
+  });
+
+  // Expand value dictionary for all columns in this spreadsheet
+  const cols = isHotel ? hotelColumns : restaurantColumns;
+  cols.forEach(col => {
+    col.values[newId] = '';
+  });
+
+  // Rerender sheet layout
+  if (isHotel) {
+    renderTbLabels(hotelLabelsContainer, true);
+    renderGridColumns(hotelColumnsContainer, hotelColumns, true);
+  } else {
+    renderTbLabels(restaurantLabelsContainer, false);
+    renderGridColumns(restaurantColumnsContainer, restaurantColumns, false);
+  }
+
+  calculateReconciliation();
+};
+
+window.deleteTbLine = function(isHotel, catId, lineId) {
+  const cats = isHotel ? hotelCategories[activeTab] : restaurantCategories[activeTab];
+  const cat = cats[catId];
+  if (!cat) return;
+  if (cat.lines.length <= 1) {
+    showToast('Cannot delete the only remaining line for this category.', 'error');
+    return;
+  }
+
+  // Remove cell
+  cat.lines = cat.lines.filter(l => l.id !== lineId);
+  // Re-label lines sequentially
+  cat.lines.forEach((l, index) => {
+    l.label = `Line ${index + 1}`;
+  });
+
+  // Rerender sheet layout
+  if (isHotel) {
+    renderTbLabels(hotelLabelsContainer, true);
+    renderGridColumns(hotelColumnsContainer, hotelColumns, true);
+  } else {
+    renderTbLabels(restaurantLabelsContainer, false);
+    renderGridColumns(restaurantColumnsContainer, restaurantColumns, false);
+  }
+
+  calculateReconciliation();
+};
 
 function renderBankInputsList() {
   bankInputsContainer.innerHTML = '';
@@ -617,11 +736,13 @@ window.deleteBankPostingRow = function(catId, postId) {
 
 function addTbColumn(isHotel, initialValues = null) {
   const defaultDate = formatDate(new Date());
-  const rows = activeTab === 'cards' ? CARD_ROWS : AMEX_ROWS;
+  const cats = isHotel ? hotelCategories[activeTab] : restaurantCategories[activeTab];
   
   const defaultValues = {};
-  rows.forEach(r => {
-    defaultValues[r.id] = initialValues ? (initialValues[r.id] || '') : '';
+  Object.keys(cats).forEach(catId => {
+    cats[catId].lines.forEach(line => {
+      defaultValues[line.id] = initialValues ? (initialValues[line.id] || '') : '';
+    });
   });
 
   const colDate = initialValues && initialValues.date ? initialValues.date : defaultDate;
@@ -654,7 +775,7 @@ function deleteTbColumn(isHotel, index) {
 
 function renderGridColumns(container, colsArray, isHotel) {
   container.innerHTML = '';
-  const rows = activeTab === 'cards' ? CARD_ROWS : AMEX_ROWS;
+  const catsObj = isHotel ? hotelCategories[activeTab] : restaurantCategories[activeTab];
 
   colsArray.forEach((col, index) => {
     const colDiv = document.createElement('div');
@@ -685,31 +806,45 @@ function renderGridColumns(container, colsArray, isHotel) {
 
     colDiv.appendChild(headerCell);
 
-    // Value input cells
-    rows.forEach(row => {
-      const valCell = document.createElement('div');
-      valCell.className = 'sheet-value-cell';
-
-      const inputPrefix = document.createElement('div');
-      inputPrefix.className = 'input-prefix';
-
-      const dollarSpan = document.createElement('span');
-      dollarSpan.textContent = '$';
-      inputPrefix.appendChild(dollarSpan);
-
-      const input = document.createElement('input');
-      input.type = 'text'; // CHANGED from number to text to support math equations
-      input.placeholder = '0.00';
-      input.value = col.values[row.id];
+    // Loop categories to build cell rows aligned perfectly with left labels
+    Object.keys(catsObj).forEach(catId => {
+      const cat = catsObj[catId];
       
-      input.addEventListener('input', (e) => {
-        col.values[row.id] = e.target.value; // Store raw text formula
-        calculateReconciliation();
-      });
+      // 1. Spacing row matching the category header label
+      const spacerCell = document.createElement('div');
+      spacerCell.className = 'sheet-value-cell cat-header-spacer';
+      colDiv.appendChild(spacerCell);
 
-      inputPrefix.appendChild(input);
-      valCell.appendChild(inputPrefix);
-      colDiv.appendChild(valCell);
+      // 2. Dynamic sub-line rows containing text input cells
+      cat.lines.forEach(line => {
+        const valCell = document.createElement('div');
+        valCell.className = 'sheet-value-cell';
+
+        const inputPrefix = document.createElement('div');
+        inputPrefix.className = 'input-prefix';
+
+        const dollarSpan = document.createElement('span');
+        dollarSpan.textContent = '$';
+        inputPrefix.appendChild(dollarSpan);
+
+        const input = document.createElement('input');
+        input.type = 'text'; // supports formulas e.g. 10+20
+        input.placeholder = '0.00';
+        
+        if (col.values[line.id] === undefined) {
+          col.values[line.id] = '';
+        }
+        input.value = col.values[line.id];
+        
+        input.addEventListener('input', (e) => {
+          col.values[line.id] = e.target.value;
+          calculateReconciliation();
+        });
+
+        inputPrefix.appendChild(input);
+        valCell.appendChild(inputPrefix);
+        colDiv.appendChild(valCell);
+      });
     });
 
     container.appendChild(colDiv);
@@ -720,18 +855,24 @@ function renderGridColumns(container, colsArray, isHotel) {
 
 // --- CORE RECONCILIATION CALCULATION LOGIC ---
 
-function sumGridRow(cols, rowId) {
+function sumCategory(cols, catId, isHotel) {
   let sum = 0;
+  const catsObj = isHotel ? hotelCategories[activeTab] : restaurantCategories[activeTab];
+  const cat = catsObj[catId];
+  if (!cat) return 0;
+  
   cols.forEach(col => {
-    const val = col.values[rowId];
-    sum += parseMathExpression(val);
+    cat.lines.forEach(line => {
+      const val = col.values[line.id];
+      sum += parseMathExpression(val);
+    });
   });
   return sum;
 }
 
 function runReconciliationLogic() {
   const result = {
-    tbSums: {}, // Combined sum of Hotel + Restaurant row values
+    tbSums: {}, // Combined sum of Hotel + Restaurant category sums
     bank: {},
     rows: [],
     totalLedger: 0,
@@ -750,11 +891,11 @@ function runReconciliationLogic() {
     result.bank[key] = sum;
   });
 
-  // 2. Sum Trial Balance categories (Combined Hotel + Restaurant)
+  // 2. Sum Trial Balance categories (Combined Hotel + Restaurant category sums)
   const rows = activeTab === 'cards' ? CARD_ROWS : AMEX_ROWS;
   rows.forEach(r => {
-    const hotelSum = sumGridRow(hotelColumns, r.id);
-    const restaurantSum = sumGridRow(restaurantColumns, r.id);
+    const hotelSum = sumCategory(hotelColumns, r.id, true);
+    const restaurantSum = sumCategory(restaurantColumns, r.id, false);
     result.tbSums[r.id] = hotelSum + restaurantSum;
   });
 
@@ -941,8 +1082,11 @@ function handleSaveReport(e) {
     bankDate,
     hotelColumns: JSON.parse(JSON.stringify(hotelColumns)),
     restaurantColumns: JSON.parse(JSON.stringify(restaurantColumns)),
-    bankPostings: JSON.parse(JSON.stringify(bankPostings)), // Store entire structured bank list
-    bank: calculation.bank, // Flattened sums for backward compatibility
+    // Store categories structure inside report for history reload layout preservation
+    hotelCategories: JSON.parse(JSON.stringify(hotelCategories)),
+    restaurantCategories: JSON.parse(JSON.stringify(restaurantCategories)),
+    bankPostings: JSON.parse(JSON.stringify(bankPostings)),
+    bank: calculation.bank, 
     totalLedger: calculation.totalLedger,
     totalBank: calculation.totalBank,
     netDiscrepancy: calculation.netDiscrepancy,
@@ -1010,7 +1154,16 @@ window.editReportRecord = function(id) {
       bankBadgeTitle.textContent = "Bank Settled (AMEX)";
     }
 
-    // Load grids state
+    // Load dynamic categories layout from saved report, or fallback to default single lines
+    if (report.hotelCategories) {
+      hotelCategories = JSON.parse(JSON.stringify(report.hotelCategories));
+      restaurantCategories = JSON.parse(JSON.stringify(report.restaurantCategories || report.hotelCategories));
+    } else {
+      hotelCategories = getInitialCategories();
+      restaurantCategories = getInitialCategories();
+    }
+
+    // Load columns
     if (report.hotelColumns) {
       hotelColumns = JSON.parse(JSON.stringify(report.hotelColumns));
       restaurantColumns = JSON.parse(JSON.stringify(report.restaurantColumns || []));
@@ -1022,8 +1175,20 @@ window.editReportRecord = function(id) {
       restaurantColumns = [];
     }
 
-    renderTbLabels(hotelLabelsContainer);
-    renderTbLabels(restaurantLabelsContainer);
+    // Backwards compatibility remapping: if values are at category key names (e.g. 'visa'), remap them to first line ID (e.g. 'visa_0')
+    const colsList = [...hotelColumns, ...restaurantColumns];
+    colsList.forEach(col => {
+      const legacyIds = ['visa', 'mc', 'discover', 'debit1', 'debit2', 'visapos', 'mcpos', 'diner', 'amex', 'amexpos'];
+      legacyIds.forEach(id => {
+        if (col.values[id] !== undefined && col.values[`${id}_0`] === undefined) {
+          col.values[`${id}_0`] = col.values[id];
+        }
+      });
+    });
+
+    // Rerender sheet grids
+    renderTbLabels(hotelLabelsContainer, true);
+    renderTbLabels(restaurantLabelsContainer, false);
 
     renderGridColumns(hotelColumnsContainer, hotelColumns, true);
     renderGridColumns(restaurantColumnsContainer, restaurantColumns, false);
@@ -1031,11 +1196,10 @@ window.editReportRecord = function(id) {
     const bankDateInput = document.getElementById('bank-date');
     if (bankDateInput) bankDateInput.value = report.bankDate;
 
-    // Load bank postings with backward compatibility
+    // Load bank statement postings list
     if (report.bankPostings) {
       bankPostings = JSON.parse(JSON.stringify(report.bankPostings));
     } else if (report.bank) {
-      // Map flat key-value report to structured array list
       bankPostings = {
         visa: [{ id: 'visa_loaded', value: report.bank['visa'] || '' }],
         mc: [{ id: 'mc_loaded', value: report.bank['mc'] || '' }],
@@ -1428,17 +1592,37 @@ function exportReportToPDF(id) {
   const breakdownHeaders = [["Reconciliation Category", "Ledger Total (CB)", "Bank Statement", "Discrepancy", "Status"]];
   const breakdownRows = [];
   
+  // Calculate category sums on the fly from saved report data
   const tbSums = {};
   const rows = isCards ? CARD_ROWS : AMEX_ROWS;
   rows.forEach(r => {
     let hotelSum = 0;
     let restaurantSum = 0;
     
-    if (report.hotelColumns) {
-      hotelSum = sumGridRow(report.hotelColumns, r.id);
-      restaurantSum = sumGridRow(report.restaurantColumns || [], r.id);
-    } else if (report.tbColumns) {
-      hotelSum = sumGridRow(report.tbColumns, r.id);
+    // We sum all dynamic category lines using report's saved categories configuration
+    const savedHotelCats = report.hotelCategories || getInitialCategories();
+    const savedRestaurantCats = report.restaurantCategories || report.hotelCategories || getInitialCategories();
+    
+    const hotelCat = savedHotelCats[report.reconType][r.id];
+    if (hotelCat && report.hotelColumns) {
+      report.hotelColumns.forEach(col => {
+        hotelCat.lines.forEach(line => {
+          // Fallback legacy remapping check
+          const val = col.values[line.id] !== undefined ? col.values[line.id] : col.values[r.id];
+          hotelSum += parseMathExpression(val);
+        });
+      });
+    }
+
+    const restCat = savedRestaurantCats[report.reconType][r.id];
+    if (restCat && report.restaurantColumns) {
+      report.restaurantColumns.forEach(col => {
+        restCat.lines.forEach(line => {
+          // Fallback legacy remapping check
+          const val = col.values[line.id] !== undefined ? col.values[line.id] : col.values[r.id];
+          restaurantSum += parseMathExpression(val);
+        });
+      });
     }
     
     tbSums[r.id] = hotelSum + restaurantSum;
@@ -1538,7 +1722,6 @@ function exportReportToPDF(id) {
 
   const compFileStr = report.companyId === 'ws_hospitality' ? 'WS_Hospitality' : 'WS_Hotels';
   const tabName = report.reconType === 'cards' ? 'Cards' : 'AMEX';
-  doc.save(`Reconciliation_${compFileStr}_${tabName}_${report.bankDate}.pdf`);
   doc.save(`Reconciliation_${compFileStr}_${tabName}_${report.bankDate}.pdf`);
   showToast(`Archived PDF downloaded!`, 'success');
 }
@@ -1667,6 +1850,20 @@ function formatCurrency(amount) {
     style: 'currency',
     currency: 'USD'
   }).format(amount);
+}
+
+// Helper to sum all entered values for summary clipboard formatting
+function sumColCategoryGroup(cols, catId, isHotel) {
+  let sum = 0;
+  const catsObj = isHotel ? hotelCategories[activeTab] : restaurantCategories[activeTab];
+  const cat = catsObj[catId];
+  if (!cat) return 0;
+  cols.forEach(col => {
+    cat.lines.forEach(line => {
+      sum += parseMathExpression(col.values[line.id]);
+    });
+  });
+  return sum;
 }
 
 function showToast(message, type = 'info') {
