@@ -282,8 +282,18 @@
             </div>
             
             <div class="card-body">
-              <div id="bank-inputs-container" class="bank-inputs-list">
-                <!-- Injected dynamically by JS -->
+              <div class="spreadsheet-container">
+                <!-- Sticky Labels Column on Left -->
+                <div id="bank-labels-container" class="spreadsheet-labels">
+                  <!-- Injected dynamically by JS -->
+                </div>
+                
+                <!-- Scroll area for the single column (fits without scroll) -->
+                <div class="spreadsheet-scroll-area" style="overflow-x: hidden;">
+                  <div id="bank-columns-container" class="spreadsheet-columns-container" style="min-width: 100%;">
+                    <!-- Injected dynamically by JS -->
+                  </div>
+                </div>
               </div>
               
               <div class="action-buttons" style="margin-top: 1.5rem;">

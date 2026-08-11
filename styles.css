@@ -427,7 +427,7 @@ body.light-theme .spreadsheet-container {
 }
 
 .spreadsheet-labels {
-  flex: 0 0 160px;
+  flex: 0 0 180px;
   display: flex;
   flex-direction: column;
   background-color: var(--bg-secondary);

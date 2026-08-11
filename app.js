@@ -76,7 +76,7 @@ let userDisplayName, btnLogout, btnSettingsToggle, settingsView, btnCloseSetting
 let companyTabsContainer, subTabsContainer;
 let hotelLabelsContainer, hotelColumnsContainer, btnAddHotelCol;
 let restaurantLabelsContainer, restaurantColumnsContainer, btnAddRestaurantCol;
-let bankInputsContainer, bankBadgeTitle;
+let bankLabelsContainer, bankColumnsContainer, bankBadgeTitle;
 let btnSave, btnClear, reconTbody;
 let totalLedgerDisplay, totalBankDisplay, netDiscrepancyDisplay, discrepancyIcon, discrepancyIconContainer;
 let historyTbody, historyCount, noHistoryMessage;
@@ -114,7 +114,8 @@ document.addEventListener('DOMContentLoaded', () => {
   restaurantColumnsContainer = document.getElementById('restaurant-columns-container');
   btnAddRestaurantCol = document.getElementById('btn-add-restaurant-col');
 
-  bankInputsContainer = document.getElementById('bank-inputs-container');
+  bankLabelsContainer = document.getElementById('bank-labels-container');
+  bankColumnsContainer = document.getElementById('bank-columns-container');
   bankBadgeTitle = document.getElementById('bank-badge-title');
   
   btnSave = document.getElementById('btn-save');
@@ -653,24 +654,10 @@ window.deleteTbLine = function(isHotel, catId, lineId) {
 };
 
 function renderBankInputsList() {
-  bankInputsContainer.innerHTML = '';
+  bankLabelsContainer.innerHTML = '';
+  bankColumnsContainer.innerHTML = '';
 
-  // Render Bank Date input row
-  const dateRow = document.createElement('div');
-  dateRow.className = 'bank-input-row';
-  dateRow.style.marginBottom = '16px';
-  dateRow.innerHTML = `
-    <label for="bank-date" style="font-weight: 700;">Bank Date</label>
-    <input type="date" id="bank-date" required>
-  `;
-  bankInputsContainer.appendChild(dateRow);
-  
-  const bankDateInput = document.getElementById('bank-date');
-  bankDateInput.value = formatDate(new Date());
-  bankDateInput.addEventListener('change', calculateReconciliation);
-
-  // Render bank categories dynamically with sub-postings
-  const categories = activeTab === 'cards' 
+  const categories = activeTab === 'cards'
     ? [
         { id: 'visa', name: 'Visa Settled' },
         { id: 'mc', name: 'MasterCard (MC) Settled' },
@@ -682,70 +669,105 @@ function renderBankInputsList() {
         { id: 'amex', name: 'AMEX Settled' }
       ];
 
-  categories.forEach(cat => {
-    const catBlock = document.createElement('div');
-    catBlock.className = 'bank-cat-block';
-    catBlock.style.borderBottom = '1px solid var(--border-color)';
-    catBlock.style.paddingBottom = '12px';
-    catBlock.style.marginBottom = '12px';
+  // --- 1. RENDER LABELS COLUMN ---
+  const headerLabelCell = document.createElement('div');
+  headerLabelCell.className = 'sheet-label-cell header-cell';
+  headerLabelCell.innerHTML = 'Bank Category';
+  bankLabelsContainer.appendChild(headerLabelCell);
 
-    const catHeader = document.createElement('div');
-    catHeader.style.display = 'flex';
-    catHeader.style.justifyContent = 'space-between';
-    catHeader.style.alignItems = 'center';
-    catHeader.style.marginBottom = '8px';
-    catHeader.innerHTML = `
-      <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);">${cat.name}</span>
-      <button type="button" class="btn btn-outline btn-sm" onclick="addBankPostingRow('${cat.id}')" style="padding: 3px 8px; font-size: 0.75rem;">
-        <i data-lucide="plus" style="width: 12px; height: 12px;"></i> Add Line
+  categories.forEach(cat => {
+    // Category Header row
+    const catRow = document.createElement('div');
+    catRow.className = 'sheet-label-cell cat-header-cell';
+    catRow.innerHTML = `
+      <span>${cat.name}</span>
+      <button type="button" class="btn-add-sub-line" onclick="addBankPostingRow('${cat.id}')" title="Add Line">
+        <i data-lucide="plus"></i>
       </button>
     `;
-    catBlock.appendChild(catHeader);
+    bankLabelsContainer.appendChild(catRow);
 
-    // List of posting rows
+    // Dynamic line rows
     const postings = bankPostings[cat.id] || [];
     postings.forEach((post, index) => {
-      const row = document.createElement('div');
-      row.className = 'bank-input-row';
-      row.style.marginBottom = '6px';
-      
+      const lineRow = document.createElement('div');
+      lineRow.className = 'sheet-label-cell';
+      lineRow.style.fontWeight = 'normal';
+      lineRow.style.fontSize = '0.75rem';
+      lineRow.style.paddingLeft = '18px';
+      lineRow.style.color = 'var(--text-muted)';
+      lineRow.style.display = 'flex';
+      lineRow.style.justifyContent = 'space-between';
+      lineRow.style.alignItems = 'center';
+
       let deleteBtnHtml = '';
       if (postings.length > 1) {
         deleteBtnHtml = `
-          <button type="button" class="btn-del-col" style="margin-left: 8px;" onclick="deleteBankPostingRow('${cat.id}', '${post.id}')" title="Delete Line">
-            <i data-lucide="trash-2"></i>
+          <button type="button" class="btn-del-col" onclick="deleteBankPostingRow('${cat.id}', '${post.id}')" title="Delete Line" style="padding: 1px;">
+            <i data-lucide="trash-2" style="width: 10px; height: 10px;"></i>
           </button>
         `;
       }
 
-      row.innerHTML = `
-        <label style="font-weight: normal; font-size: 0.75rem; color: var(--text-muted); padding-left: 8px;">Line #${index + 1}</label>
-        <div style="display: flex; align-items: center; width: 100%;">
-          <div class="input-prefix" style="flex: 1;">
-            <span>$</span>
-            <input type="text" id="bank-post-${post.id}" placeholder="0.00" value="${post.value}">
-          </div>
-          ${deleteBtnHtml}
+      lineRow.innerHTML = `
+        <span>Line #${index + 1}</span>
+        ${deleteBtnHtml}
+      `;
+      bankLabelsContainer.appendChild(lineRow);
+    });
+  });
+
+  // --- 2. RENDER SINGLE VALUE COLUMN ---
+  const col = document.createElement('div');
+  col.className = 'spreadsheet-col';
+  col.style.flex = '1';
+
+  // Header value cell
+  const headerValCell = document.createElement('div');
+  headerValCell.className = 'sheet-value-cell header-cell';
+  headerValCell.style.justifyContent = 'center';
+  
+  const dateInput = document.createElement('input');
+  dateInput.type = 'date';
+  dateInput.id = 'bank-date';
+  dateInput.required = true;
+  
+  const savedDateInput = document.querySelector('.bank-card input[type="date"]');
+  const savedDate = savedDateInput ? savedDateInput.value : '';
+  dateInput.value = savedDate || formatDate(new Date());
+  
+  dateInput.addEventListener('change', calculateReconciliation);
+  headerValCell.appendChild(dateInput);
+  col.appendChild(headerValCell);
+
+  categories.forEach(cat => {
+    // Spacer row for Category Header
+    const catSpacer = document.createElement('div');
+    catSpacer.className = 'sheet-value-cell cat-header-spacer';
+    col.appendChild(catSpacer);
+
+    // Input fields row
+    const postings = bankPostings[cat.id] || [];
+    postings.forEach((post, index) => {
+      const inputCell = document.createElement('div');
+      inputCell.className = 'sheet-value-cell';
+      inputCell.innerHTML = `
+        <div class="input-prefix">
+          <span>$</span>
+          <input type="text" id="bank-post-${post.id}" placeholder="0.00" value="${post.value}">
         </div>
       `;
-      catBlock.appendChild(row);
+      col.appendChild(inputCell);
 
-      const inputField = row.querySelector('input');
+      const inputField = inputCell.querySelector('input');
       inputField.addEventListener('input', (e) => {
-        post.value = e.target.value; // Store as text string directly to support math
+        post.value = e.target.value;
         calculateReconciliation();
       });
     });
-
-    bankInputsContainer.appendChild(catBlock);
   });
 
-  if (bankInputsContainer.lastChild) {
-    bankInputsContainer.lastChild.style.borderBottom = 'none';
-    bankInputsContainer.lastChild.style.paddingBottom = '0';
-    bankInputsContainer.lastChild.style.marginBottom = '0';
-  }
-
+  bankColumnsContainer.appendChild(col);
   lucide.createIcons();
 }
 
@@ -2049,51 +2071,115 @@ window.loadLiveStatusBoard = function() {
         return;
       }
 
-      data.forEach(item => {
-        const card = document.createElement('div');
-        let cardClass = 'status-board-card';
-        let statusBadge = '';
-        let metricsHtml = '';
+      // Group into WS Hospitality and WS Hotels
+      const companies = [
+        { id: 'ws_hospitality', title: 'WS Hospitality', icon: 'building' },
+        { id: 'ws_hotels', title: 'WS Hotels', icon: 'hotel' }
+      ];
 
-        if (item.hasReport) {
-          const isBalanced = Math.abs(item.netDiscrepancy) <= 0.005;
-          cardClass += isBalanced ? ' reconciled-card' : ' discrepant-card';
-          statusBadge = isBalanced 
-            ? '<span class="status-pill status-reconciled" style="padding: 2px 8px; font-size: 0.7rem;"><i data-lucide="check" style="width: 10px; height: 10px;"></i> Balanced</span>'
-            : '<span class="status-pill status-discrepant" style="padding: 2px 8px; font-size: 0.7rem;"><i data-lucide="alert-triangle" style="width: 10px; height: 10px;"></i> Out of Balance</span>';
-          
-          const diffClass = item.netDiscrepancy > 0.005 ? 'val-positive' : (item.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
-          
-          metricsHtml = `
-            <div class="status-board-card-metrics">
-              <div><span>TB Period:</span> <span>${item.tbDateLabel}</span></div>
-              <div><span>Bank Date:</span> <span>${item.bankDate}</span></div>
-              <div><span>Ledger Total:</span> <span>${formatCurrency(item.totalLedger)}</span></div>
-              <div><span>Bank Total:</span> <span>${formatCurrency(item.totalBank)}</span></div>
-              <div style="font-weight: bold; border-top: 1px solid var(--border-color); padding-top: 4px; margin-top: 4px;">
-                <span>Discrepancy:</span> <span class="${diffClass}">${item.netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(item.netDiscrepancy)}</span>
-              </div>
-            </div>
-          `;
-        } else {
-          statusBadge = '<span class="status-pill status-discrepant" style="background-color: rgba(245,158,11,0.1); color: var(--accent-yellow); border-color: rgba(245,158,11,0.2); padding: 2px 8px; font-size: 0.7rem;"><i data-lucide="help-circle" style="width: 10px; height: 10px;"></i> No Data</span>';
-          metricsHtml = `
-            <p style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; margin: 10px 0;">No reconciliation reports have been saved for this workspace yet.</p>
-          `;
-        }
+      companies.forEach(company => {
+        const companyCard = document.createElement('div');
+        companyCard.className = 'status-board-card';
+        companyCard.style.display = 'flex';
+        companyCard.style.flexDirection = 'column';
+        companyCard.style.gap = '12px';
 
-        const dateStr = item.hasReport ? new Date(item.timestamp).toLocaleDateString() : 'N/A';
-
-        card.className = cardClass;
-        card.innerHTML = `
-          <div class="status-board-card-title">${item.title}</div>
-          ${metricsHtml}
-          <div class="status-board-card-footer">
-            ${statusBadge}
-            <span style="color: var(--text-muted); font-size: 0.7rem;">Saved: ${dateStr}</span>
-          </div>
+        // Card Header
+        const header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.alignItems = 'center';
+        header.style.gap = '8px';
+        header.style.borderBottom = '2px solid var(--border-color)';
+        header.style.paddingBottom = '8px';
+        header.style.marginBottom = '4px';
+        header.innerHTML = `
+          <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="${company.icon}" style="color: var(--accent-blue); width: 18px; height: 18px;"></i>
+            ${company.title}
+          </h3>
         `;
-        container.appendChild(card);
+        companyCard.appendChild(header);
+
+        // Sections: Cards & AMEX
+        const types = [
+          { key: 'cards', title: 'Cards Reconciliation' },
+          { key: 'amex', title: 'AMEX Reconciliation' }
+        ];
+
+        types.forEach((type, idx) => {
+          const item = data.find(d => d.companyId === company.id && d.reconType === type.key);
+          
+          const section = document.createElement('div');
+          section.style.display = 'flex';
+          section.style.flexDirection = 'column';
+          section.style.gap = '6px';
+          section.style.marginTop = '4px';
+
+          // Section Title
+          const secTitle = document.createElement('div');
+          secTitle.style.fontSize = '0.8rem';
+          secTitle.style.fontWeight = '700';
+          secTitle.style.color = 'var(--text-primary)';
+          secTitle.style.display = 'flex';
+          secTitle.style.justifyContent = 'space-between';
+          secTitle.style.alignItems = 'center';
+          secTitle.innerHTML = `<span>${type.title}</span>`;
+          section.appendChild(secTitle);
+
+          let metricsHtml = '';
+          let statusBadge = '';
+          let dateStr = 'N/A';
+
+          if (item && item.hasReport) {
+            const isBalanced = Math.abs(item.netDiscrepancy) <= 0.005;
+            statusBadge = isBalanced 
+              ? '<span class="status-pill status-reconciled" style="padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="check" style="width: 8px; height: 8px;"></i> Balanced</span>'
+              : '<span class="status-pill status-discrepant" style="padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="alert-triangle" style="width: 8px; height: 8px;"></i> Out of Balance</span>';
+            
+            const diffClass = item.netDiscrepancy > 0.005 ? 'val-positive' : (item.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
+            dateStr = new Date(item.timestamp).toLocaleDateString();
+
+            metricsHtml = `
+              <div class="status-board-card-metrics" style="padding-left: 8px; border-left: 2px solid ${isBalanced ? 'var(--accent-green)' : 'var(--accent-red)'};">
+                <div><span>TB Period:</span> <span>${item.tbDateLabel}</span></div>
+                <div><span>Bank Date:</span> <span>${item.bankDate}</span></div>
+                <div><span>Ledger Total:</span> <span>${formatCurrency(item.totalLedger)}</span></div>
+                <div><span>Bank Total:</span> <span>${formatCurrency(item.totalBank)}</span></div>
+                <div style="font-weight: bold; border-top: 1px dashed var(--border-color); padding-top: 2px; margin-top: 2px;">
+                  <span>Discrepancy:</span> <span class="${diffClass}">${item.netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(item.netDiscrepancy)}</span>
+                </div>
+              </div>
+            `;
+          } else {
+            statusBadge = '<span class="status-pill status-discrepant" style="background-color: rgba(245,158,11,0.1); color: var(--accent-yellow); border-color: rgba(245,158,11,0.2); padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="help-circle" style="width: 8px; height: 8px;"></i> No Data</span>';
+            metricsHtml = `
+              <p style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin: 4px 0 4px 8px;">No reconciliation reports saved yet.</p>
+            `;
+          }
+
+          secTitle.innerHTML += statusBadge;
+          section.appendChild(document.createRange().createContextualFragment(metricsHtml));
+
+          const secFooter = document.createElement('div');
+          secFooter.style.fontSize = '0.7rem';
+          secFooter.style.color = 'var(--text-muted)';
+          secFooter.style.textAlign = 'right';
+          secFooter.style.marginTop = '2px';
+          secFooter.innerHTML = `Saved: ${dateStr}`;
+          section.appendChild(secFooter);
+
+          companyCard.appendChild(section);
+
+          if (idx === 0) {
+            const hr = document.createElement('hr');
+            hr.style.border = 'none';
+            hr.style.borderTop = '1px dotted var(--border-color)';
+            hr.style.margin = '6px 0';
+            companyCard.appendChild(hr);
+          }
+        });
+
+        container.appendChild(companyCard);
       });
       lucide.createIcons();
     })
