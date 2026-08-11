@@ -96,19 +96,6 @@
       <section class="form-section">
         <form id="reconcile-form">
           
-          <!-- Bank Date Selection -->
-          <div class="card date-card">
-            <h3 class="card-title"><i data-lucide="calendar"></i> Reconciliation Date</h3>
-            <div class="date-inputs-single">
-              <div class="form-group">
-                <label for="bank-date">Bank Statement Settlement Date</label>
-                <input type="date" id="bank-date" required>
-              </div>
-            </div>
-            <div class="helper-text">
-              <i data-lucide="info" class="inline-icon"></i> Deposits hit the bank on this date. Reconcile this against one or more Trial Balance days.
-            </div>
-          </div>
 
           <!-- Section: Dynamic Trial Balance (CB Ledger) -->
           <div class="card inputs-card tb-card">
@@ -155,6 +142,10 @@
             </div>
             
             <div class="bank-inputs-list">
+              <div class="bank-input-row">
+                <label for="bank-date">Bank Date</label>
+                <input type="date" id="bank-date" required>
+              </div>
               <div class="bank-input-row">
                 <label for="bank-visa">Visa Settled</label>
                 <div class="input-prefix">
