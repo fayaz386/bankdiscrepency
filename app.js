@@ -101,8 +101,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // History table filters
-  searchInput.addEventListener('input', renderHistoryTable);
   filterSelect.addEventListener('change', renderHistoryTable);
+
+  // Automatically trigger browser datepicker when clicking anywhere on a date input
+  document.addEventListener('click', (e) => {
+    if (e.target && e.target.type === 'date') {
+      try {
+        e.target.showPicker();
+      } catch (err) {
+        // Fallback for older browsers
+      }
+    }
+  });
 
   initChart();
   lucide.createIcons();

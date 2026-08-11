@@ -481,7 +481,7 @@ body.light-theme .spreadsheet-labels {
 }
 
 .spreadsheet-col {
-  flex: 0 0 165px;
+  flex: 0 0 185px;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border-color);
@@ -528,15 +528,16 @@ body.light-theme .sheet-value-cell.header-cell {
 }
 
 .sheet-value-cell.header-cell input[type="date"] {
-  padding: 4px 6px;
-  font-size: 0.75rem;
+  padding: 4px 8px;
+  font-size: 0.8rem;
   font-weight: 600;
   border-radius: var(--border-radius-sm);
   border: 1px solid var(--input-border);
   background-color: var(--input-bg);
   color: var(--text-primary);
-  width: 110px;
-  height: 28px;
+  width: 135px;
+  height: 32px;
+  cursor: pointer;
 }
 
 .sheet-value-cell .input-prefix {
