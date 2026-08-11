@@ -158,12 +158,22 @@ document.addEventListener('DOMContentLoaded', () => {
   historyToDate.addEventListener('change', renderHistoryTable);
   historyStatusFilter.addEventListener('change', renderHistoryTable);
 
-  // Global click to open calendar datepicker on anywhere click
+  // Global click listeners
   document.addEventListener('click', (e) => {
+    // 1. Automatically trigger browser datepicker when clicking anywhere on a date input
     if (e.target && e.target.type === 'date') {
       try {
         e.target.showPicker();
       } catch (err) {}
+    }
+
+    // 2. Card collapse toggler
+    const collapseBtn = e.target.closest('.btn-collapse');
+    if (collapseBtn) {
+      const card = collapseBtn.closest('.card');
+      if (card) {
+        card.classList.toggle('collapsed');
+      }
     }
   });
 
