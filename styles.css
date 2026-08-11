@@ -187,11 +187,11 @@ body.light-theme .bg-glow {
 /* Container Layout */
 .app-container {
   max-width: 1440px;
-  margin: 2rem auto;
-  padding: 0 2rem;
+  margin: 1.25rem auto;
+  padding: 0 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.25rem;
 }
 
 /* Card General Design */
@@ -202,7 +202,7 @@ body.light-theme .bg-glow {
   box-shadow: var(--shadow-card);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  padding: 1.5rem;
+  padding: 1.25rem;
   transition: var(--transition-all);
 }
 
@@ -237,7 +237,7 @@ body.light-theme .bg-glow {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.75rem;
 }
 
 .card-header-flex .card-title {
@@ -445,8 +445,8 @@ body.light-theme .spreadsheet-labels {
 }
 
 .sheet-label-cell {
-  height: 52px;
-  padding: 0 16px;
+  height: 42px;
+  padding: 0 12px;
   display: flex;
   align-items: center;
   font-size: 0.8rem;
@@ -461,7 +461,7 @@ body.light-theme .spreadsheet-labels {
 }
 
 .sheet-label-cell.header-cell {
-  height: 60px;
+  height: 46px;
   background-color: rgba(255, 255, 255, 0.02);
   color: var(--text-primary);
   font-family: var(--font-header);
@@ -502,8 +502,8 @@ body.light-theme .spreadsheet-col:hover {
 }
 
 .sheet-value-cell {
-  height: 52px;
-  padding: 6px;
+  height: 42px;
+  padding: 4px;
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--border-color);
@@ -514,8 +514,8 @@ body.light-theme .spreadsheet-col:hover {
 }
 
 .sheet-value-cell.header-cell {
-  height: 60px;
-  padding: 6px 12px;
+  height: 46px;
+  padding: 4px 10px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -528,15 +528,15 @@ body.light-theme .sheet-value-cell.header-cell {
 }
 
 .sheet-value-cell.header-cell input[type="date"] {
-  padding: 4px 8px;
-  font-size: 0.8rem;
+  padding: 2px 6px;
+  font-size: 0.75rem;
   font-weight: 600;
   border-radius: var(--border-radius-sm);
   border: 1px solid var(--input-border);
   background-color: var(--input-bg);
   color: var(--text-primary);
-  width: 135px;
-  height: 32px;
+  width: 130px;
+  height: 28px;
   cursor: pointer;
 }
 
@@ -545,15 +545,15 @@ body.light-theme .sheet-value-cell.header-cell {
 }
 
 .sheet-value-cell .input-prefix input {
-  padding: 6px 8px 6px 20px;
+  padding: 4px 6px 4px 18px;
   font-size: 0.85rem;
   text-align: right;
-  height: 32px;
+  height: 28px;
 }
 
 .sheet-value-cell .input-prefix span {
-  left: 8px;
-  font-size: 0.8rem;
+  left: 6px;
+  font-size: 0.75rem;
 }
 
 /* Trash Icon Button */
