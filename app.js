@@ -483,7 +483,7 @@ function setupNavigationTabs() {
           companyIndicator.classList.add('indicator-orange');
           companyIndicator.innerHTML = `<i data-lucide="building"></i> Active Workspace: <strong>${compName}</strong>`;
         } else {
-          companyIndicator.classList.add('indicator-blue');
+          companyIndicator.classList.add('indicator-yellow');
           companyIndicator.innerHTML = `<i data-lucide="hotel"></i> Active Workspace: <strong>${compName}</strong>`;
         }
       }
@@ -2050,7 +2050,7 @@ function toggleWorkspaceView(mode) {
         companyIndicator.classList.add('indicator-orange');
         companyIndicator.innerHTML = `<i data-lucide="building"></i> Active Workspace: <strong>${compName}</strong>`;
       } else {
-        companyIndicator.classList.add('indicator-blue');
+        companyIndicator.classList.add('indicator-yellow');
         companyIndicator.innerHTML = `<i data-lucide="hotel"></i> Active Workspace: <strong>${compName}</strong>`;
       }
     }
@@ -2106,7 +2106,7 @@ window.loadLiveStatusBoard = function() {
         header.style.borderBottom = '2px solid var(--border-color)';
         header.style.paddingBottom = '8px';
         header.style.marginBottom = '4px';
-        const accentColor = company.id === 'ws_hospitality' ? '#f97316' : '#0ea5e9';
+        const accentColor = company.id === 'ws_hospitality' ? '#f97316' : '#eab308';
         header.innerHTML = `
           <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 6px;">
             <i data-lucide="${company.icon}" style="color: ${accentColor}; width: 18px; height: 18px;"></i>

@@ -1589,17 +1589,18 @@ body.light-theme .cat-header-spacer {
   color: #f97316;
 }
 
-/* Blue/Hotel indicators style */
-.active-company-indicator.indicator-blue {
-  background-color: rgba(14, 165, 233, 0.15);
-  border: 3px solid #0ea5e9;
-  box-shadow: 0 0 25px rgba(14, 165, 233, 0.35);
+/* Yellow/Hotel indicators style */
+.active-company-indicator.indicator-yellow {
+  background-color: rgba(234, 179, 8, 0.12);
+  border: 3px solid #eab308;
+  box-shadow: 0 0 25px rgba(234, 179, 8, 0.35);
 }
-.active-company-indicator.indicator-blue strong {
-  background-color: #0ea5e9;
+.active-company-indicator.indicator-yellow strong {
+  background-color: #eab308;
+  color: #000000;
 }
-.active-company-indicator.indicator-blue i {
-  color: #0ea5e9;
+.active-company-indicator.indicator-yellow i {
+  color: #eab308;
 }
 
 /* Compact Bank Statement entries */
