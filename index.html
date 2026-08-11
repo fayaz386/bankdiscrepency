@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Bank Reconciliation & Discrepancy Report</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- CSS -->
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- jsPDF & jsPDF-AutoTable CDNs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="dark-theme">
+  <!-- Dynamic Background Glow -->
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+
+  <header class="app-header">
+    <div class="header-container">
+      <div class="logo-area">
+        <div class="logo-icon">
+          <i data-lucide="landmark"></i>
+        </div>
+        <div class="logo-text">
+          <h1>ReconcileFlow</h1>
+          <p>Daily Bank Discrepancy Reporter</p>
+        </div>
+      </div>
+      
+      <div class="header-controls">
+        <button id="theme-toggle" class="btn-icon" title="Toggle Dark/Light Mode">
+          <i data-lucide="sun" class="sun-icon"></i>
+          <i data-lucide="moon" class="moon-icon"></i>
+        </button>
+        <button id="btn-sample-data" class="btn btn-secondary">
+          <i data-lucide="table-properties"></i>
+          Load Weekend Example
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-container">
+    
+    <!-- Top Summary Row -->
+    <section class="summary-cards">
+      <div class="card summary-card" id="card-ledger">
+        <div class="card-icon" style="--icon-color: var(--accent-blue);">
+          <i data-lucide="book-open"></i>
+        </div>
+        <div class="card-info">
+          <span>Ledger Total (CB)</span>
+          <h2 id="total-ledger-display">$0.00</h2>
+        </div>
+      </div>
+      
+      <div class="card summary-card" id="card-bank">
+        <div class="card-icon" style="--icon-color: var(--accent-purple);">
+          <i data-lucide="wallet"></i>
+        </div>
+        <div class="card-info">
+          <span>Bank Statement Total</span>
+          <h2 id="total-bank-display">$0.00</h2>
+        </div>
+      </div>
+      
+      <div class="card summary-card" id="card-discrepancy">
+        <div class="card-icon" id="discrepancy-icon-container" style="--icon-color: var(--accent-green);">
+          <i data-lucide="check-circle-2" id="discrepancy-icon"></i>
+        </div>
+        <div class="card-info">
+          <span>Net Discrepancy</span>
+          <h2 id="net-discrepancy-display">$0.00</h2>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Workspace Split -->
+    <div class="workspace-grid">
+      
+      <!-- Left Column: Inputs Form -->
+      <section class="form-section">
+        <form id="reconcile-form">
+          
+          <!-- Bank Date Selection -->
+          <div class="card date-card">
+            <h3 class="card-title"><i data-lucide="calendar"></i> Reconciliation Date</h3>
+            <div class="date-inputs-single">
+              <div class="form-group">
+                <label for="bank-date">Bank Statement Settlement Date</label>
+                <input type="date" id="bank-date" required>
+              </div>
+            </div>
+            <div class="helper-text">
+              <i data-lucide="info" class="inline-icon"></i> Deposits hit the bank on this date. Reconcile this against one or more Trial Balance days.
+            </div>
+          </div>
+
+          <!-- Section: Dynamic Trial Balance (CB Ledger) -->
+          <div class="card inputs-card tb-card">
+            <div class="card-header-flex">
+              <div class="card-header-title-area">
+                <h3 class="card-title"><i data-lucide="receipt"></i> Hotel Trial Balance (Col C)</h3>
+                <p class="card-subtitle">Add columns for weekends or holidays that deposit in a single batch</p>
+              </div>
+              <div class="card-actions">
+                <button type="button" class="btn btn-sm btn-secondary" id="btn-add-tb-col">
+                  <i data-lucide="plus"></i> Add TB Day
+                </button>
+              </div>
+            </div>
+            
+            <div class="spreadsheet-container">
+              <!-- Sticky Labels Column on Left -->
+              <div class="spreadsheet-labels">
+                <div class="sheet-label-cell header-cell">TB Date</div>
+                <div class="sheet-label-cell">Visa</div>
+                <div class="sheet-label-cell">MasterCard (MC)</div>
+                <div class="sheet-label-cell">Discover</div>
+                <div class="sheet-label-cell">Debit 1</div>
+                <div class="sheet-label-cell">Debit 2</div>
+                <div class="sheet-label-cell">Visa POS</div>
+                <div class="sheet-label-cell">MC POS</div>
+                <div class="sheet-label-cell">Diner</div>
+              </div>
+              
+              <!-- Scrolling Columns Container -->
+              <div class="spreadsheet-scroll-area">
+                <div id="tb-columns-container" class="spreadsheet-columns-container">
+                  <!-- Dynamic columns of inputs injected here by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Bank Statement Amounts -->
+          <div class="card inputs-card bank-card">
+            <div class="card-header-flex">
+              <h3 class="card-title"><i data-lucide="building-2"></i> Bank Statement (Col I)</h3>
+              <span class="badge badge-purple">Bank Settled</span>
+            </div>
+            
+            <div class="bank-inputs-list">
+              <div class="bank-input-row">
+                <label for="bank-visa">Visa Settled</label>
+                <div class="input-prefix">
+                  <span>$</span>
+                  <input type="number" id="bank-visa" step="0.01" placeholder="0.00">
+                </div>
+              </div>
+              
+              <div class="bank-input-row">
+                <label for="bank-mc">MasterCard (MC) Settled</label>
+                <div class="input-prefix">
+                  <span>$</span>
+                  <input type="number" id="bank-mc" step="0.01" placeholder="0.00">
+                </div>
+              </div>
+
+              <div class="bank-input-row">
+                <label for="bank-discover">Discover Settled</label>
+                <div class="input-prefix">
+                  <span>$</span>
+                  <input type="number" id="bank-discover" step="0.01" placeholder="0.00">
+                </div>
+              </div>
+
+              <div class="bank-input-row">
+                <label for="bank-debit1">Debit 1 Settled</label>
+                <div class="input-prefix">
+                  <span>$</span>
+                  <input type="number" id="bank-debit1" step="0.01" placeholder="0.00">
+                </div>
+              </div>
+
+              <div class="bank-input-row">
+                <label for="bank-debit2">Debit 2 Settled</label>
+                <div class="input-prefix">
+                  <span>$</span>
+                  <input type="number" id="bank-debit2" step="0.01" placeholder="0.00">
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="action-buttons">
+            <button type="submit" class="btn btn-primary" id="btn-save">
+              <i data-lucide="save"></i> Save Report
+            </button>
+            <button type="button" class="btn btn-secondary-danger" id="btn-clear">
+              <i data-lucide="refresh-cw"></i> Clear Inputs
+            </button>
+          </div>
+        </form>
+      </section>
+      
+      <!-- Right Column: Live Reconciliation & Analytics -->
+      <section class="analysis-section">
+        
+        <!-- Live Detailed Breakdown Table -->
+        <div class="card recon-card">
+          <h3 class="card-title"><i data-lucide="balance-scale"></i> Live Reconciliation Summary</h3>
+          <div class="table-container">
+            <table class="recon-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th class="num-col">Ledger Total (CB)</th>
+                  <th class="num-col">Bank Statement</th>
+                  <th class="num-col">Discrepancy</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="recon-tbody">
+                <!-- Rows generated dynamically by JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="card-footer-actions">
+            <button type="button" class="btn btn-sm btn-outline" id="btn-copy-summary">
+              <i data-lucide="copy"></i> Copy Summary
+            </button>
+            <button type="button" class="btn btn-sm btn-outline" id="btn-print-report">
+              <i data-lucide="printer"></i> Print / PDF
+            </button>
+            <button type="button" class="btn btn-sm btn-primary" id="btn-download-pdf">
+              <i data-lucide="file-down"></i> Download PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- Discrepancy Trend Chart -->
+        <div class="card chart-card">
+          <h3 class="card-title"><i data-lucide="trending-up"></i> Discrepancy Trend (Last 30 Days)</h3>
+          <div class="chart-container">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+
+      </section>
+    </div>
+
+    <!-- Bottom Section: Saved History Log -->
+    <section class="card history-card">
+      <div class="card-header-flex history-header">
+        <div class="history-title-area">
+          <h3 class="card-title"><i data-lucide="history"></i> Reconciliation History</h3>
+          <span class="count-badge" id="history-count">0 reports</span>
+        </div>
+        <div class="history-filters">
+          <div class="filter-group">
+            <span class="filter-label">From</span>
+            <input type="date" id="history-from-date" class="filter-date-input">
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">To</span>
+            <input type="date" id="history-to-date" class="filter-date-input">
+          </div>
+          <select id="history-status-filter" class="filter-select">
+            <option value="all">All Reports</option>
+            <option value="reconciled">Reconciled (Zero Difference)</option>
+            <option value="discrepant">Discrepant (Has Difference)</option>
+          </select>
+          <div class="export-buttons-group">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-export-csv" title="Download Excel Summary">
+              <i data-lucide="download"></i> Excel Summary
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-export-summary-pdf" title="Download PDF Summary">
+              <i data-lucide="file-text"></i> PDF Summary
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-container history-table-container">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>TB Range / Date</th>
+              <th>Bank Date</th>
+              <th class="num-col">Total Ledger Receipts</th>
+              <th class="num-col">Total Bank Deposits</th>
+              <th class="num-col">Net Discrepancy</th>
+              <th>Status</th>
+              <th class="actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+        <div id="no-history-message" class="empty-state">
+          <i data-lucide="folder-open" class="empty-icon"></i>
+          <p>No reconciliation reports found. Create one above!</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <div class="footer-content">
+      <p>&copy; 2026 ReconcileFlow. Designed for Bank & Ledger Reconciliation.</p>
+    </div>
+  </footer>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="toast hidden">
+    <div class="toast-content">
+      <i data-lucide="info" id="toast-icon"></i>
+      <span id="toast-message">Report saved successfully!</span>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="app.js"></script>
+</body>
+</html>
