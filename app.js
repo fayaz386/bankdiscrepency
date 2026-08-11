@@ -214,6 +214,10 @@ function handleLogout() {
 }
 
 function showLoginUI() {
+  loginScreen.style.display = '';
+  mainHeader.style.display = 'none';
+  mainContainer.style.display = 'none';
+  mainFooter.style.display = 'none';
   loginScreen.classList.remove('hidden');
   mainHeader.classList.add('hidden');
   mainContainer.classList.add('hidden');
@@ -223,6 +227,10 @@ function showLoginUI() {
 }
 
 function showAuthenticatedUI() {
+  loginScreen.style.display = 'none';
+  mainHeader.style.display = '';
+  mainContainer.style.display = '';
+  mainFooter.style.display = '';
   loginScreen.classList.add('hidden');
   mainHeader.classList.remove('hidden');
   mainContainer.classList.remove('hidden');
@@ -234,8 +242,10 @@ function showAuthenticatedUI() {
   
   // Toggle Admin capabilities
   if (currentUser.role === 'admin') {
+    btnSettingsToggle.style.display = '';
     btnSettingsToggle.classList.remove('hidden');
   } else {
+    btnSettingsToggle.style.display = 'none';
     btnSettingsToggle.classList.add('hidden');
     toggleSettingsView(false); // Hide settings panel if they were on it
   }
@@ -246,14 +256,21 @@ function showAuthenticatedUI() {
 }
 
 function toggleSettingsView(forceOpen) {
-  const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : settingsView.classList.contains('hidden');
+  const isHidden = settingsView.style.display === 'none' || settingsView.classList.contains('hidden');
+  const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : isHidden;
   
   if (shouldOpen) {
+    settingsView.style.display = '';
+    dashboardView.style.display = 'none';
+    document.getElementById('dashboard-summary-cards').style.display = 'none';
     settingsView.classList.remove('hidden');
     dashboardView.classList.add('hidden');
     document.getElementById('dashboard-summary-cards').classList.add('hidden');
     loadUsersDirectory();
   } else {
+    settingsView.style.display = 'none';
+    dashboardView.style.display = '';
+    document.getElementById('dashboard-summary-cards').style.display = '';
     settingsView.classList.add('hidden');
     dashboardView.classList.remove('hidden');
     document.getElementById('dashboard-summary-cards').classList.remove('hidden');
