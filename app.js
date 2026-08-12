@@ -1077,17 +1077,25 @@ function calculateReconciliation() {
     dateRangeStr = `${startFmt} - ${endFmt}`;
   }
 
+  const isAllZero = result.totalLedger === 0 && result.totalBank === 0;
+
+  // Toggle meta dates visibility
+  const metaContainer = document.querySelector('.recon-summary-meta');
+  if (metaContainer) {
+    metaContainer.style.display = isAllZero ? 'none' : 'flex';
+  }
+
   if (liveSummaryDates) {
-    liveSummaryDates.textContent = dateRangeStr ? `(${dateRangeStr})` : '';
+    liveSummaryDates.textContent = (!isAllZero && dateRangeStr) ? `(${dateRangeStr})` : '';
   }
 
   if (summaryTbDateVal) {
-    summaryTbDateVal.textContent = dateRangeStr || 'N/A';
+    summaryTbDateVal.textContent = (!isAllZero && dateRangeStr) ? dateRangeStr : 'N/A';
   }
 
   if (summaryBankDateVal) {
     const bankDateInput = document.getElementById('bank-date');
-    if (bankDateInput && bankDateInput.value) {
+    if (bankDateInput && bankDateInput.value && !isAllZero) {
       const options = { month: 'short', day: 'numeric', year: 'numeric' };
       summaryBankDateVal.textContent = new Date(bankDateInput.value + 'T00:00:00').toLocaleDateString('en-US', options);
     } else {
@@ -1100,9 +1108,14 @@ function calculateReconciliation() {
   result.rows.forEach(r => {
     const row = document.createElement('tr');
     const diffClass = r.diff > 0.005 ? 'val-positive' : (r.diff < -0.005 ? 'val-negative' : 'val-neutral');
-    const statusText = Math.abs(r.diff) <= 0.005 
-      ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>' 
-      : '<span class="status-pill status-discrepant"><i data-lucide="alert-triangle"></i> Discrepant</span>';
+    
+    // Do not show Reconciled status if everything is zero (no entry has been made)
+    let statusText = '';
+    if (!isAllZero) {
+      statusText = Math.abs(r.diff) <= 0.005 
+        ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>' 
+        : '<span class="status-pill status-discrepant"><i data-lucide="alert-triangle"></i> Discrepant</span>';
+    }
 
     row.innerHTML = `
       <td><strong>${r.name}</strong></td>
@@ -1120,9 +1133,14 @@ function calculateReconciliation() {
   totalRow.style.borderTop = '2px solid var(--border-color)';
   
   const netClass = result.netDiscrepancy > 0.005 ? 'val-positive' : (result.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
-  const netStatus = Math.abs(result.netDiscrepancy) <= 0.005 
-    ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Balanced</span>' 
-    : '<span class="status-pill status-discrepant"><i data-lucide="alert-circle"></i> Out of Balance</span>';
+  
+  // Do not show Reconciled/Balanced status if everything is zero (no entry has been made)
+  let netStatus = '';
+  if (!isAllZero) {
+    netStatus = Math.abs(result.netDiscrepancy) <= 0.005 
+      ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Balanced</span>' 
+      : '<span class="status-pill status-discrepant"><i data-lucide="alert-circle"></i> Out of Balance</span>';
+  }
 
   totalRow.innerHTML = `
     <td>TOTALS</td>
