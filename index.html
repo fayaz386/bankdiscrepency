@@ -192,31 +192,7 @@
           <i data-lucide="refresh-cw"></i> Refresh Status
         </button>
       </div>
-      
-      <!-- Live Dashboard Filters -->
-      <div class="live-dashboard-filters" style="display: flex; gap: 12px; align-items: center; padding: 8px 12px; background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); margin: 0.25rem 1rem 0.5rem 1rem; flex-wrap: wrap;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <i data-lucide="filter" style="width: 14px; height: 14px; color: var(--accent-blue);"></i>
-          <span style="font-size: 0.75rem; font-weight: bold; color: var(--text-primary);">Filter Summary Period:</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <label for="live-from-date" style="font-size: 0.75rem; color: var(--text-secondary);">From</label>
-          <input type="date" id="live-from-date" class="filter-select" style="padding: 2px 6px; font-size: 0.75rem; width: 120px; height: 24px; border-radius: var(--border-radius-sm);">
-        </div>
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <label for="live-to-date" style="font-size: 0.75rem; color: var(--text-secondary);">To</label>
-          <input type="date" id="live-to-date" class="filter-select" style="padding: 2px 6px; font-size: 0.75rem; width: 120px; height: 24px; border-radius: var(--border-radius-sm);">
-        </div>
-        <div style="display: flex; align-items: center; gap: 6px; margin-left: auto;">
-          <label for="live-history-select" style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">Or Select Saved Run</label>
-          <select id="live-history-select" class="filter-select" style="padding: 2px 6px; font-size: 0.75rem; width: 180px; height: 24px; border-radius: var(--border-radius-sm);">
-            <option value="">-- Latest Saved --</option>
-          </select>
-        </div>
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-clear-live-dates" style="padding: 2px 8px; font-size: 0.7rem; height: 24px; display: flex; align-items: center; justify-content: center;">Clear</button>
-      </div>
-
-      <div class="live-status-grid" id="live-status-grid-container" style="padding: 0 1rem 1rem 1rem;">
+      <div class="live-status-grid" id="live-status-grid-container" style="padding: 1rem;">
         <!-- Dynamic cards injected by JS -->
       </div>
     </section>

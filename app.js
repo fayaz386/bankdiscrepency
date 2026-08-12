@@ -50,6 +50,10 @@ let activeTab = 'live';
 let activeLoadedReportId = null;
 let historySortColumn = 'timestamp';
 let historySortAscending = false;
+const companyFilters = {
+  ws_hospitality: { from: '', to: '', selectedRun: '' },
+  ws_hotels: { from: '', to: '', selectedRun: '' }
+};
 
 // Separate Grid States
 let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa_0: '', mc_0: ''... } }]
@@ -83,7 +87,7 @@ let bankLabelsContainer, bankColumnsContainer, bankBadgeTitle;
 let btnSave, btnClear, reconTbody, selectLoadHistory, btnRefresh;
 let totalLedgerDisplay, totalBankDisplay, netDiscrepancyDisplay, discrepancyIcon, discrepancyIconContainer;
 let historyTbody, historyCount, noHistoryMessage;
-let historyFromDate, historyToDate, historyStatusFilter, liveFromDate, liveToDate, btnClearLiveDates, liveHistorySelect;
+let historyFromDate, historyToDate, historyStatusFilter;
 let btnExportCsv, btnExportSummaryPdf, btnCopySummary, btnPrintReport, btnDownloadPdf;
 let usersTbody, addUserForm, newUsername, newPassword, newRole;
 
@@ -141,10 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
   historyToDate = document.getElementById('history-to-date');
   historyStatusFilter = document.getElementById('history-status-filter');
   
-  liveFromDate = document.getElementById('live-from-date');
-  liveToDate = document.getElementById('live-to-date');
-  btnClearLiveDates = document.getElementById('btn-clear-live-dates');
-  liveHistorySelect = document.getElementById('live-history-select');
+
   
   btnExportCsv = document.getElementById('btn-export-csv');
   btnExportSummaryPdf = document.getElementById('btn-export-summary-pdf');
@@ -211,33 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
   historyToDate.addEventListener('change', renderHistoryTable);
   historyStatusFilter.addEventListener('change', renderHistoryTable);
   
-  if (liveFromDate) {
-    liveFromDate.addEventListener('change', () => {
-      if (liveHistorySelect) liveHistorySelect.value = '';
-      loadLiveStatusBoard();
-    });
-  }
-  if (liveToDate) {
-    liveToDate.addEventListener('change', () => {
-      if (liveHistorySelect) liveHistorySelect.value = '';
-      loadLiveStatusBoard();
-    });
-  }
-  if (liveHistorySelect) {
-    liveHistorySelect.addEventListener('change', () => {
-      if (liveFromDate) liveFromDate.value = '';
-      if (liveToDate) liveToDate.value = '';
-      loadLiveStatusBoard();
-    });
-  }
-  if (btnClearLiveDates) {
-    btnClearLiveDates.addEventListener('click', () => {
-      if (liveFromDate) liveFromDate.value = '';
-      if (liveToDate) liveToDate.value = '';
-      if (liveHistorySelect) liveHistorySelect.value = '';
-      loadLiveStatusBoard();
-    });
-  }
+
 
   // Global click listeners
   document.addEventListener('click', (e) => {
@@ -2317,155 +2292,15 @@ window.loadLiveStatusBoard = function() {
   `;
   lucide.createIcons();
 
-  const fromVal = liveFromDate ? liveFromDate.value : '';
-  const toVal = liveToDate ? liveToDate.value : '';
-  const selectedHistoryDate = liveHistorySelect ? liveHistorySelect.value : '';
-  const isFiltered = fromVal || toVal || selectedHistoryDate;
-
-  // We fetch the complete history to either list, aggregate, or load historical snapshots
   fetch('/api/all-history')
     .then(res => res.json())
     .then(rawList => {
       container.innerHTML = '';
       
-      // Populate unique bankDate runs in dropdown list if not already done
-      if (liveHistorySelect) {
-        const currentSel = liveHistorySelect.value;
-        liveHistorySelect.innerHTML = '<option value="">-- Latest Saved --</option>';
-        
-        const uniqueHistoryDates = Array.from(new Set(rawList.map(r => r.bankDate).filter(Boolean)));
-        uniqueHistoryDates.sort((a, b) => new Date(b) - new Date(a));
-        
-        uniqueHistoryDates.forEach(dateStr => {
-          const opt = document.createElement('option');
-          opt.value = dateStr;
-          opt.textContent = dateStr;
-          liveHistorySelect.appendChild(opt);
-        });
-        
-        liveHistorySelect.value = currentSel;
-      }
-
       const companies = [
         { id: 'ws_hospitality', title: 'WS Hospitality', icon: 'building' },
         { id: 'ws_hotels', title: 'WS Hotels', icon: 'hotel' }
       ];
-
-      let processedData = [];
-
-      if (selectedHistoryDate) {
-        // Show only the reports matching this specific selected bankDate exactly
-        const combos = [
-          { companyId: 'ws_hospitality', reconType: 'cards' },
-          { companyId: 'ws_hospitality', reconType: 'amex' },
-          { companyId: 'ws_hotels', reconType: 'cards' },
-          { companyId: 'ws_hotels', reconType: 'amex' }
-        ];
-
-        combos.forEach(combo => {
-          const match = rawList.find(r => r.companyId === combo.companyId && r.reconType === combo.reconType && r.bankDate === selectedHistoryDate);
-          if (match) {
-            processedData.push({
-              companyId: combo.companyId,
-              reconType: combo.reconType,
-              hasReport: true,
-              tbDateLabel: computeReportDateLabel(match),
-              bankDate: match.bankDate,
-              totalLedger: match.totalLedger,
-              totalBank: match.totalBank,
-              netDiscrepancy: match.netDiscrepancy,
-              timestamp: match.timestamp
-            });
-          } else {
-            processedData.push({
-              companyId: combo.companyId,
-              reconType: combo.reconType,
-              hasReport: false
-            });
-          }
-        });
-      } else if (fromVal || toVal) {
-        // Aggregate sum over selected date range
-        const combos = [
-          { companyId: 'ws_hospitality', reconType: 'cards' },
-          { companyId: 'ws_hospitality', reconType: 'amex' },
-          { companyId: 'ws_hotels', reconType: 'cards' },
-          { companyId: 'ws_hotels', reconType: 'amex' }
-        ];
-
-        combos.forEach(combo => {
-          let matches = rawList.filter(r => r.companyId === combo.companyId && r.reconType === combo.reconType);
-          if (fromVal) matches = matches.filter(r => r.bankDate >= fromVal);
-          if (toVal) matches = matches.filter(r => r.bankDate <= toVal);
-
-          if (matches.length > 0) {
-            matches.sort((a, b) => new Date(a.bankDate) - new Date(b.bankDate));
-            const totalLedger = matches.reduce((sum, r) => sum + (r.totalLedger || 0), 0);
-            const totalBank = matches.reduce((sum, r) => sum + (r.totalBank || 0), 0);
-            const netDiscrepancy = totalBank - totalLedger;
-
-            const earliest = matches[0].bankDate;
-            const latest = matches[matches.length - 1].bankDate;
-            const rangeLabel = earliest === latest ? earliest : `${earliest} to ${latest}`;
-
-            processedData.push({
-              companyId: combo.companyId,
-              reconType: combo.reconType,
-              hasReport: true,
-              tbDateLabel: `Aggregated Summary`,
-              bankDate: rangeLabel,
-              totalLedger,
-              totalBank,
-              netDiscrepancy,
-              timestamp: matches[matches.length - 1].timestamp
-            });
-          } else {
-            processedData.push({
-              companyId: combo.companyId,
-              reconType: combo.reconType,
-              hasReport: false
-            });
-          }
-        });
-      } else {
-        // Default: Show the single latest saved report for each combo
-        const combos = [
-          { companyId: 'ws_hospitality', reconType: 'cards' },
-          { companyId: 'ws_hospitality', reconType: 'amex' },
-          { companyId: 'ws_hotels', reconType: 'cards' },
-          { companyId: 'ws_hotels', reconType: 'amex' }
-        ];
-
-        combos.forEach(combo => {
-          const companyHistory = rawList.filter(r => r.companyId === combo.companyId && r.reconType === combo.reconType);
-          if (companyHistory.length > 0) {
-            companyHistory.sort((a, b) => b.timestamp - a.timestamp);
-            const latestMatch = companyHistory[0];
-            processedData.push({
-              companyId: combo.companyId,
-              reconType: combo.reconType,
-              hasReport: true,
-              tbDateLabel: computeReportDateLabel(latestMatch),
-              bankDate: latestMatch.bankDate,
-              totalLedger: latestMatch.totalLedger,
-              totalBank: latestMatch.totalBank,
-              netDiscrepancy: latestMatch.netDiscrepancy,
-              timestamp: latestMatch.timestamp
-            });
-          } else {
-            processedData.push({
-              companyId: combo.companyId,
-              reconType: combo.reconType,
-              hasReport: false
-            });
-          }
-        });
-      }
-
-      if (processedData.length === 0) {
-        container.innerHTML = '<div class="empty-state"><p>No reports found in system.</p></div>';
-        return;
-      }
 
       companies.forEach(company => {
         const companyCard = document.createElement('div');
@@ -2481,7 +2316,7 @@ window.loadLiveStatusBoard = function() {
         header.style.gap = '8px';
         header.style.borderBottom = '2px solid var(--border-color)';
         header.style.paddingBottom = '8px';
-        header.style.marginBottom = '4px';
+        header.style.marginBottom = '2px';
         const accentColor = company.id === 'ws_hospitality' ? '#f97316' : '#eab308';
         header.innerHTML = `
           <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 6px;">
@@ -2491,6 +2326,79 @@ window.loadLiveStatusBoard = function() {
         `;
         companyCard.appendChild(header);
 
+        // Company-Specific Filters Container
+        const filtersContainer = document.createElement('div');
+        filtersContainer.className = 'live-company-filters';
+        filtersContainer.style.display = 'flex';
+        filtersContainer.style.flexWrap = 'wrap';
+        filtersContainer.style.gap = '8px';
+        filtersContainer.style.alignItems = 'center';
+        filtersContainer.style.padding = '6px 10px';
+        filtersContainer.style.backgroundColor = 'rgba(255,255,255,0.015)';
+        filtersContainer.style.border = '1px solid var(--border-color)';
+        filtersContainer.style.borderRadius = 'var(--border-radius-sm)';
+        filtersContainer.style.marginBottom = '4px';
+
+        // Gather unique bankDates for this company
+        const companyHistory = rawList.filter(r => r.companyId === company.id);
+        const uniqueHistoryDates = Array.from(new Set(companyHistory.map(r => r.bankDate).filter(Boolean)));
+        uniqueHistoryDates.sort((a, b) => new Date(b) - new Date(a));
+
+        let dropdownOptions = '<option value="">-- All Runs --</option>';
+        uniqueHistoryDates.forEach(dateStr => {
+          dropdownOptions += `<option value="${dateStr}">${dateStr}</option>`;
+        });
+
+        const activeFilters = companyFilters[company.id];
+
+        filtersContainer.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <label style="font-size: 0.7rem; color: var(--text-secondary);">From</label>
+            <input type="date" class="live-from-input" value="${activeFilters.from}" style="padding: 1px 4px; font-size: 0.7rem; width: 105px; height: 20px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <label style="font-size: 0.7rem; color: var(--text-secondary);">To</label>
+            <input type="date" class="live-to-input" value="${activeFilters.to}" style="padding: 1px 4px; font-size: 0.7rem; width: 105px; height: 20px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px; margin-left: auto;">
+            <label style="font-size: 0.7rem; color: var(--text-secondary);">Run</label>
+            <select class="live-run-select" style="padding: 1px 4px; font-size: 0.7rem; width: 110px; height: 20px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+              ${dropdownOptions}
+            </select>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm live-clear-btn" style="padding: 1px 6px; font-size: 0.65rem; height: 20px; line-height: 1;">Clear</button>
+        `;
+
+        // Set active dropdown value
+        const selectEl = filtersContainer.querySelector('.live-run-select');
+        selectEl.value = activeFilters.selectedRun;
+
+        // Register filter event listeners
+        filtersContainer.querySelector('.live-from-input').addEventListener('change', (e) => {
+          companyFilters[company.id].from = e.target.value;
+          companyFilters[company.id].selectedRun = ''; // clear dropdown
+          loadLiveStatusBoard();
+        });
+        filtersContainer.querySelector('.live-to-input').addEventListener('change', (e) => {
+          companyFilters[company.id].to = e.target.value;
+          companyFilters[company.id].selectedRun = ''; // clear dropdown
+          loadLiveStatusBoard();
+        });
+        selectEl.addEventListener('change', (e) => {
+          companyFilters[company.id].selectedRun = e.target.value;
+          companyFilters[company.id].from = ''; // clear range
+          companyFilters[company.id].to = ''; // clear range
+          loadLiveStatusBoard();
+        });
+        filtersContainer.querySelector('.live-clear-btn').addEventListener('click', () => {
+          companyFilters[company.id].from = '';
+          companyFilters[company.id].to = '';
+          companyFilters[company.id].selectedRun = '';
+          loadLiveStatusBoard();
+        });
+
+        companyCard.appendChild(filtersContainer);
+
         // Sections: Cards & AMEX
         const types = [
           { key: 'cards', title: 'Cards Reconciliation' },
@@ -2498,15 +2406,26 @@ window.loadLiveStatusBoard = function() {
         ];
 
         types.forEach((type, idx) => {
-          const item = processedData.find(d => d.companyId === company.id && d.reconType === type.key);
-          
+          let matches = rawList.filter(r => r.companyId === company.id && r.reconType === type.key);
+
+          // Apply filters
+          if (activeFilters.selectedRun) {
+            matches = matches.filter(r => r.bankDate === activeFilters.selectedRun);
+          } else {
+            if (activeFilters.from) {
+              matches = matches.filter(r => r.bankDate >= activeFilters.from);
+            }
+            if (activeFilters.to) {
+              matches = matches.filter(r => r.bankDate <= activeFilters.to);
+            }
+          }
+
           const section = document.createElement('div');
           section.style.display = 'flex';
           section.style.flexDirection = 'column';
           section.style.gap = '6px';
           section.style.marginTop = '4px';
 
-          // Section Title
           const secTitle = document.createElement('div');
           secTitle.style.fontSize = '0.8rem';
           secTitle.style.fontWeight = '700';
@@ -2521,23 +2440,72 @@ window.loadLiveStatusBoard = function() {
           let statusBadge = '';
           let dateStr = 'N/A';
 
-          if (item && item.hasReport) {
-            const isBalanced = Math.abs(item.netDiscrepancy) <= 0.005;
+          if (matches.length > 0) {
+            // Sort matches chronologically by bankDate to calculate ranges
+            matches.sort((a, b) => new Date(a.bankDate) - new Date(b.bankDate));
+
+            const totalLedger = matches.reduce((sum, r) => sum + (r.totalLedger || 0), 0);
+            const totalBank = matches.reduce((sum, r) => sum + (r.totalBank || 0), 0);
+            const netDiscrepancy = totalBank - totalLedger;
+
+            const isBalanced = Math.abs(netDiscrepancy) <= 0.005;
             statusBadge = isBalanced 
               ? '<span class="status-pill status-reconciled" style="padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="check" style="width: 8px; height: 8px;"></i> Balanced</span>'
               : '<span class="status-pill status-discrepant" style="padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="alert-triangle" style="width: 8px; height: 8px;"></i> Out of Balance</span>';
             
-            const diffClass = item.netDiscrepancy > 0.005 ? 'val-positive' : (item.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
-            dateStr = new Date(item.timestamp).toLocaleDateString();
+            const diffClass = netDiscrepancy > 0.005 ? 'val-positive' : (netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
+            
+            // Format Bank Date range
+            const earliestBank = matches[0].bankDate;
+            const latestBank = matches[matches.length - 1].bankDate;
+            const bankDateRange = earliestBank === latestBank ? earliestBank : `${earliestBank} to ${latestBank}`;
+
+            // Calculate Trial Balance Date range across all matched columns
+            const tbDates = [];
+            matches.forEach(r => {
+              const hotelCols = r.hotelColumns || [];
+              const restaurantCols = r.restaurantColumns || [];
+              
+              hotelCols.filter(col => {
+                return col.values && Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
+              }).forEach(c => tbDates.push(c.date));
+              
+              restaurantCols.filter(col => {
+                return col.values && Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
+              }).forEach(c => tbDates.push(c.date));
+            });
+
+            let sortedTbDates = [...new Set(tbDates)].sort();
+            if (sortedTbDates.length === 0) {
+              matches.forEach(r => {
+                (r.hotelColumns || []).forEach(c => sortedTbDates.push(c.date));
+                (r.restaurantColumns || []).forEach(c => sortedTbDates.push(c.date));
+              });
+              sortedTbDates = [...new Set(sortedTbDates)].sort();
+            }
+
+            const sortedUniqueTbDates = sortedTbDates.filter(Boolean);
+            let tbPeriodRange = 'No Dates';
+            if (sortedUniqueTbDates.length === 1) {
+              const options = { month: 'short', day: 'numeric' };
+              tbPeriodRange = new Date(sortedUniqueTbDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
+            } else if (sortedUniqueTbDates.length > 1) {
+              const options = { month: 'short', day: 'numeric' };
+              const startFmtStr = new Date(sortedUniqueTbDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
+              const endFmtStr = new Date(sortedUniqueTbDates[sortedUniqueTbDates.length - 1] + 'T00:00:00').toLocaleDateString('en-US', options);
+              tbPeriodRange = `${startFmtStr} - ${endFmtStr}`;
+            }
+
+            dateStr = new Date(matches[matches.length - 1].timestamp).toLocaleDateString();
 
             metricsHtml = `
               <div class="status-board-card-metrics" style="padding-left: 8px; border-left: 2px solid ${isBalanced ? 'var(--accent-green)' : 'var(--accent-red)'};">
-                <div><span>TB Period:</span> <span>${item.tbDateLabel}</span></div>
-                <div><span>Bank Date:</span> <span>${item.bankDate}</span></div>
-                <div><span>Ledger Total:</span> <span>${formatCurrency(item.totalLedger)}</span></div>
-                <div><span>Bank Total:</span> <span>${formatCurrency(item.totalBank)}</span></div>
+                <div><span>TB Period:</span> <span>${tbPeriodRange}</span></div>
+                <div><span>Bank Date:</span> <span>${bankDateRange}</span></div>
+                <div><span>Ledger Total:</span> <span>${formatCurrency(totalLedger)}</span></div>
+                <div><span>Bank Total:</span> <span>${formatCurrency(totalBank)}</span></div>
                 <div style="font-weight: bold; border-top: 1px dashed var(--border-color); padding-top: 2px; margin-top: 2px;">
-                  <span>Discrepancy:</span> <span class="${diffClass}">${item.netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(item.netDiscrepancy)}</span>
+                  <span>Discrepancy:</span> <span class="${diffClass}">${netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(netDiscrepancy)}</span>
                 </div>
               </div>
             `;
