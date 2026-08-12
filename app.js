@@ -1103,25 +1103,48 @@ function calculateReconciliation() {
     }
   }
 
+  // Dynamically update headers/labels based on Tab
+  const diffHeader = document.getElementById('recon-diff-header');
+  if (diffHeader) {
+    diffHeader.textContent = activeTab === 'amex' ? 'Fee' : 'Discrepancy';
+  }
+
+  const discrepancyLabelText = document.getElementById('discrepancy-label-text');
+  if (discrepancyLabelText) {
+    discrepancyLabelText.textContent = activeTab === 'amex' ? 'Fee' : 'Net Discrepancy';
+  }
+
   // Render to Live Table
   reconTbody.innerHTML = '';
   result.rows.forEach(r => {
     const row = document.createElement('tr');
-    const diffClass = r.diff > 0.005 ? 'val-positive' : (r.diff < -0.005 ? 'val-negative' : 'val-neutral');
+    
+    // For AMEX: Fee = TB total minus Bank statement (positive)
+    const diffVal = activeTab === 'amex' ? (r.ledger - r.bank) : r.diff;
+    let diffClass = 'val-neutral';
+    if (activeTab === 'amex') {
+      diffClass = diffVal > 0.005 ? 'val-positive' : (diffVal < -0.005 ? 'val-negative' : 'val-neutral');
+    } else {
+      diffClass = r.diff > 0.005 ? 'val-positive' : (r.diff < -0.005 ? 'val-negative' : 'val-neutral');
+    }
     
     // Do not show Reconciled status if everything is zero (no entry has been made)
     let statusText = '';
     if (!isAllZero) {
-      statusText = Math.abs(r.diff) <= 0.005 
-        ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>' 
-        : '<span class="status-pill status-discrepant"><i data-lucide="alert-triangle"></i> Discrepant</span>';
+      if (activeTab === 'amex') {
+        statusText = '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>';
+      } else {
+        statusText = Math.abs(r.diff) <= 0.005 
+          ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>' 
+          : '<span class="status-pill status-discrepant"><i data-lucide="alert-triangle"></i> Discrepant</span>';
+      }
     }
 
     row.innerHTML = `
       <td><strong>${r.name}</strong></td>
       <td class="num-col">${formatCurrency(r.ledger)}</td>
       <td class="num-col">${formatCurrency(r.bank)}</td>
-      <td class="num-col ${diffClass}">${r.diff > 0.005 ? '+' : ''}${formatCurrency(r.diff)}</td>
+      <td class="num-col ${diffClass}">${(activeTab !== 'amex' && r.diff > 0.005) ? '+' : ''}${formatCurrency(diffVal)}</td>
       <td>${statusText}</td>
     `;
     reconTbody.appendChild(row);
@@ -1132,21 +1155,31 @@ function calculateReconciliation() {
   totalRow.style.fontWeight = 'bold';
   totalRow.style.borderTop = '2px solid var(--border-color)';
   
-  const netClass = result.netDiscrepancy > 0.005 ? 'val-positive' : (result.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
+  const netVal = activeTab === 'amex' ? (result.totalLedger - result.totalBank) : result.netDiscrepancy;
+  let netClass = 'val-neutral';
+  if (activeTab === 'amex') {
+    netClass = netVal > 0.005 ? 'val-positive' : (netVal < -0.005 ? 'val-negative' : 'val-neutral');
+  } else {
+    netClass = result.netDiscrepancy > 0.005 ? 'val-positive' : (result.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
+  }
   
   // Do not show Reconciled/Balanced status if everything is zero (no entry has been made)
   let netStatus = '';
   if (!isAllZero) {
-    netStatus = Math.abs(result.netDiscrepancy) <= 0.005 
-      ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Balanced</span>' 
-      : '<span class="status-pill status-discrepant"><i data-lucide="alert-circle"></i> Out of Balance</span>';
+    if (activeTab === 'amex') {
+      netStatus = '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Balanced</span>';
+    } else {
+      netStatus = Math.abs(result.netDiscrepancy) <= 0.005 
+        ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Balanced</span>' 
+        : '<span class="status-pill status-discrepant"><i data-lucide="alert-circle"></i> Out of Balance</span>';
+    }
   }
 
   totalRow.innerHTML = `
     <td>TOTALS</td>
     <td class="num-col">${formatCurrency(result.totalLedger)}</td>
     <td class="num-col">${formatCurrency(result.totalBank)}</td>
-    <td class="num-col ${netClass}">${formatCurrency(result.netDiscrepancy)}</td>
+    <td class="num-col ${netClass}">${formatCurrency(netVal)}</td>
     <td>${netStatus}</td>
   `;
   reconTbody.appendChild(totalRow);
@@ -1154,10 +1187,10 @@ function calculateReconciliation() {
   // Update Summary displays
   totalLedgerDisplay.textContent = formatCurrency(result.totalLedger);
   totalBankDisplay.textContent = formatCurrency(result.totalBank);
-  netDiscrepancyDisplay.textContent = formatCurrency(result.netDiscrepancy);
+  netDiscrepancyDisplay.textContent = formatCurrency(netVal);
 
   const discCard = document.getElementById('card-discrepancy');
-  if (Math.abs(result.netDiscrepancy) <= 0.005) {
+  if (activeTab === 'amex' || Math.abs(result.netDiscrepancy) <= 0.005) {
     netDiscrepancyDisplay.className = 'val-neutral';
     discrepancyIcon.setAttribute('data-lucide', 'check-circle-2');
     discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-green)');
