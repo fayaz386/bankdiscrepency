@@ -2454,10 +2454,21 @@ window.loadLiveStatusBoard = function() {
             
             const diffClass = netDiscrepancy > 0.005 ? 'val-positive' : (netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
             
-            // Format Bank Date range
+            // Format Bank Date range in the same style as TB Period (adding the year on the end)
             const earliestBank = matches[0].bankDate;
             const latestBank = matches[matches.length - 1].bankDate;
-            const bankDateRange = earliestBank === latestBank ? earliestBank : `${earliestBank} to ${latestBank}`;
+            let bankDateRange = '';
+            
+            if (earliestBank === latestBank) {
+              const options = { month: 'short', day: 'numeric', year: 'numeric' };
+              bankDateRange = new Date(earliestBank + 'T00:00:00').toLocaleDateString('en-US', options);
+            } else {
+              const options = { month: 'short', day: 'numeric' };
+              const startFmt = new Date(earliestBank + 'T00:00:00').toLocaleDateString('en-US', options);
+              const endFmt = new Date(latestBank + 'T00:00:00').toLocaleDateString('en-US', options);
+              const yearStr = new Date(latestBank + 'T00:00:00').getFullYear();
+              bankDateRange = `${startFmt} - ${endFmt}, ${yearStr}`;
+            }
 
             // Calculate Trial Balance Date range across all matched columns
             const tbDates = [];
