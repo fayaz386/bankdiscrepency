@@ -1889,22 +1889,60 @@ function exportCSV() {
 
   let csvContent = `Reconciliation Period Summary - ${companyName} (${tabName})\n`;
   csvContent += `Generated: ${new Date().toLocaleDateString()}\n\n`;
-  csvContent += `TB Date Range,Bank Date,Total Ledger Receipts,Total Bank Deposits,Net Discrepancy,Reconciliation Status\n`;
+  
+  if (isCards) {
+    csvContent += `TB Date Range,Bank Date,Total Ledger Receipts,Total Bank Deposits,Net Discrepancy,Reconciliation Status\n`;
+  } else {
+    csvContent += `TB Date Range,Bank Date,Total Ledger Receipts,Total Bank Deposits,Calculated Fee,Calculated Fee %,Expected Fee (Fee2),Reconciliation Status\n`;
+  }
 
   let totalLedgerSum = 0;
   let totalBankSum = 0;
   let totalNetDiff = 0;
+  let totalCalcFeeSum = 0;
+  let totalExpectedFeeSum = 0;
 
   filtered.forEach(r => {
     totalLedgerSum += r.totalLedger;
     totalBankSum += r.totalBank;
     totalNetDiff += r.netDiscrepancy;
 
-    const status = Math.abs(r.netDiscrepancy) <= 0.005 ? 'Reconciled' : 'Discrepant';
-    csvContent += `"${r.tbDateLabel}",${r.bankDate},${r.totalLedger.toFixed(2)},${r.totalBank.toFixed(2)},${r.netDiscrepancy.toFixed(2)},${status}\n`;
+    const tbLabel = computeReportDateLabel(r);
+
+    if (isCards) {
+      const status = Math.abs(r.netDiscrepancy) <= 0.005 ? 'Reconciled' : 'Discrepant';
+      csvContent += `"${r.tbDateLabel}",${r.bankDate},${r.totalLedger.toFixed(2)},${r.totalBank.toFixed(2)},${r.netDiscrepancy.toFixed(2)},${status}\n`;
+    } else {
+      const calcFee = r.totalLedger - r.totalBank;
+      const calcPercent = r.totalLedger > 0.005 ? ((calcFee / r.totalLedger) * 100) : 0;
+      const expectedFee = r.totalLedger * (amexFeeRateSetting / 100);
+      
+      totalCalcFeeSum += calcFee;
+      totalExpectedFeeSum += expectedFee;
+
+      let status = 'Reconciled';
+      if (calcPercent > amexThresholdRateSetting) {
+        status = 'Fee Exceeds Max';
+      } else if (calcFee > expectedFee + 0.005) {
+        status = 'Fee Warning';
+      }
+
+      csvContent += `"${tbLabel}",${r.bankDate},${r.totalLedger.toFixed(2)},${r.totalBank.toFixed(2)},${calcFee.toFixed(2)},${calcPercent.toFixed(2)}%,${expectedFee.toFixed(2)},${status}\n`;
+    }
   });
 
-  csvContent += `\n"ROLL-UP PERIOD SUMS",,${totalLedgerSum.toFixed(2)},${totalBankSum.toFixed(2)},${totalNetDiff.toFixed(2)},${Math.abs(totalNetDiff) <= 0.005 ? 'Balanced' : 'Out of Balance'}\n`;
+  if (isCards) {
+    csvContent += `\n"ROLL-UP PERIOD SUMS",,${totalLedgerSum.toFixed(2)},${totalBankSum.toFixed(2)},${totalNetDiff.toFixed(2)},${Math.abs(totalNetDiff) <= 0.005 ? 'Balanced' : 'Out of Balance'}\n`;
+  } else {
+    const totalCalcPercent = totalLedgerSum > 0.005 ? ((totalCalcFeeSum / totalLedgerSum) * 100) : 0;
+    let rollUpStatus = 'Balanced';
+    if (totalCalcPercent > amexThresholdRateSetting) {
+      rollUpStatus = 'Out of Limit';
+    } else if (totalCalcFeeSum > totalExpectedFeeSum + 0.005) {
+      rollUpStatus = 'Fee Warning';
+    }
+    csvContent += `\n"ROLL-UP PERIOD SUMS",,${totalLedgerSum.toFixed(2)},${totalBankSum.toFixed(2)},${totalCalcFeeSum.toFixed(2)},${totalCalcPercent.toFixed(2)}%,${totalExpectedFeeSum.toFixed(2)},${rollUpStatus}\n`;
+  }
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -1951,24 +1989,71 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
 
   const result = runReconciliationLogic();
 
-  const breakdownHeaders = [["Reconciliation Category", "Ledger Total (CB)", "Bank Statement", "Discrepancy", "Status"]];
-  const breakdownRows = result.rows.map(r => {
-    return [
-      r.name,
-      formatCurrency(r.ledger),
-      formatCurrency(r.bank),
-      (r.diff > 0.005 ? '+' : '') + formatCurrency(r.diff),
-      Math.abs(r.diff) <= 0.005 ? "Reconciled" : "Discrepant"
-    ];
-  });
+  const breakdownHeaders = isCards 
+    ? [["Reconciliation Category", "Ledger Total (CB)", "Bank Statement", "Discrepancy", "Status"]]
+    : [["Reconciliation Category", "Ledger Total (CB)", "Bank Statement", "Fee (%)", `Fee2 (${amexFeeRateSetting}%)`, "Status"]];
 
-  breakdownRows.push([
-    "TOTALS",
-    formatCurrency(result.totalLedger),
-    formatCurrency(result.totalBank),
-    formatCurrency(result.netDiscrepancy),
-    Math.abs(result.netDiscrepancy) <= 0.005 ? "Balanced" : "Out of Balance"
-  ]);
+  const breakdownRows = [];
+  if (isCards) {
+    result.rows.forEach(r => {
+      breakdownRows.push([
+        r.name,
+        formatCurrency(r.ledger),
+        formatCurrency(r.bank),
+        (r.diff > 0.005 ? '+' : '') + formatCurrency(r.diff),
+        Math.abs(r.diff) <= 0.005 ? "Reconciled" : "Discrepant"
+      ]);
+    });
+    breakdownRows.push([
+      "TOTALS",
+      formatCurrency(result.totalLedger),
+      formatCurrency(result.totalBank),
+      formatCurrency(result.netDiscrepancy),
+      Math.abs(result.netDiscrepancy) <= 0.005 ? "Balanced" : "Out of Balance"
+    ]);
+  } else {
+    result.rows.forEach(r => {
+      const calcFee = r.ledger - r.bank;
+      const calcPercent = r.ledger > 0.005 ? ((calcFee / r.ledger) * 100) : 0;
+      const expectedFee = r.ledger * (amexFeeRateSetting / 100);
+      
+      let statusText = 'Reconciled';
+      if (calcPercent > amexThresholdRateSetting) {
+        statusText = 'Fee Exceeds Max';
+      } else if (calcFee > expectedFee + 0.005) {
+        statusText = 'Fee Warning';
+      }
+
+      breakdownRows.push([
+        r.name,
+        formatCurrency(r.ledger),
+        formatCurrency(r.bank),
+        `${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)`,
+        formatCurrency(expectedFee),
+        statusText
+      ]);
+    });
+
+    const totalCalcFee = result.totalLedger - result.totalBank;
+    const totalCalcPercent = result.totalLedger > 0.005 ? ((totalCalcFee / result.totalLedger) * 100) : 0;
+    const totalExpectedFee = result.totalLedger * (amexFeeRateSetting / 100);
+    
+    let rollUpStatus = 'Balanced';
+    if (totalCalcPercent > amexThresholdRateSetting) {
+      rollUpStatus = 'Out of Limit';
+    } else if (totalCalcFee > totalExpectedFee + 0.005) {
+      rollUpStatus = 'Fee Warning';
+    }
+
+    breakdownRows.push([
+      "TOTALS",
+      formatCurrency(result.totalLedger),
+      formatCurrency(result.totalBank),
+      `${formatCurrency(totalCalcFee)} (${totalCalcPercent.toFixed(2)}%)`,
+      formatCurrency(totalExpectedFee),
+      rollUpStatus
+    ]);
+  }
 
   doc.autoTable({
     startY: 44,
@@ -1976,30 +2061,52 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
     body: breakdownRows,
     theme: 'striped',
     headStyles: { fillStyle: 'F', fillColor: [71, 85, 105], textColor: [255, 255, 255], fontStyle: 'bold' },
-    columnStyles: {
+    columnStyles: isCards ? {
       0: { fontStyle: 'bold' },
       1: { halign: 'right' },
       2: { halign: 'right' },
       3: { halign: 'right' },
       4: { halign: 'center' }
+    } : {
+      0: { fontStyle: 'bold' },
+      1: { halign: 'right' },
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+      4: { halign: 'right' },
+      5: { halign: 'center' }
     },
     didParseCell: function (data) {
       if (data.row.index === breakdownRows.length - 1) {
         data.cell.styles.fontStyle = 'bold';
         data.cell.styles.fillColor = [241, 245, 249];
         
-        if (data.column.index === 3) {
-          if (result.netDiscrepancy > 0.005) {
-            data.cell.styles.textColor = [16, 185, 129];
-          } else if (result.netDiscrepancy < -0.005) {
+        if (isCards && data.column.index === 3) {
+          if (result.netDiscrepancy > 0.005) data.cell.styles.textColor = [16, 185, 129];
+          if (result.netDiscrepancy < -0.005) data.cell.styles.textColor = [239, 68, 68];
+        } else if (!isCards && data.column.index === 3) {
+          const totalCalcFee = result.totalLedger - result.totalBank;
+          const totalCalcPercent = result.totalLedger > 0.005 ? ((totalCalcFee / result.totalLedger) * 100) : 0;
+          if (totalCalcPercent > amexThresholdRateSetting) {
             data.cell.styles.textColor = [239, 68, 68];
+          } else if (totalCalcFee > (result.totalLedger * (amexFeeRateSetting / 100)) + 0.005) {
+            data.cell.styles.textColor = [245, 158, 11];
           }
         }
       } else {
-        if (data.column.index === 3) {
+        if (isCards && data.column.index === 3) {
           const val = result.rows[data.row.index].diff;
           if (val > 0.005) data.cell.styles.textColor = [16, 185, 129];
           if (val < -0.005) data.cell.styles.textColor = [239, 68, 68];
+        } else if (!isCards && data.column.index === 3) {
+          const r = result.rows[data.row.index];
+          const calcFee = r.ledger - r.bank;
+          const calcPercent = r.ledger > 0.005 ? ((calcFee / r.ledger) * 100) : 0;
+          const expectedFee = r.ledger * (amexFeeRateSetting / 100);
+          if (calcPercent > amexThresholdRateSetting) {
+            data.cell.styles.textColor = [239, 68, 68];
+          } else if (calcFee > expectedFee + 0.005) {
+            data.cell.styles.textColor = [245, 158, 11];
+          }
         }
       }
     }
@@ -2020,22 +2127,27 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
   doc.text("Total Ledger Receipts: " + formatCurrency(result.totalLedger), 20, currentY + 18);
   doc.text("Total Bank Deposits:   " + formatCurrency(result.totalBank), 20, currentY + 26);
 
-  if (Math.abs(result.netDiscrepancy) <= 0.005) {
+  const netVal = isCards ? result.netDiscrepancy : (result.totalLedger - result.totalBank);
+  const isBalanced = isCards 
+    ? (Math.abs(result.netDiscrepancy) <= 0.005)
+    : ((result.totalLedger - result.totalBank) <= (result.totalLedger * (amexFeeRateSetting / 100)) + 0.005 && ((result.totalLedger - result.totalBank) / result.totalLedger * 100) <= amexThresholdRateSetting);
+
+  if (isBalanced) {
     doc.setFillColor(209, 250, 229);
     doc.roundedRect(120, currentY + 6, 68, 22, 2, 2, 'F');
     doc.setFont("Helvetica", "bold");
     doc.setTextColor(5, 150, 105);
-    doc.text("RECONCILED", 138, currentY + 15);
+    doc.text(isCards ? "RECONCILED" : "BALANCED", 132, currentY + 15);
     doc.setFontSize(9);
-    doc.text("Zero Net Difference", 136, currentY + 21);
+    doc.text(isCards ? "Zero Net Difference" : "Fee Within Limits", 132, currentY + 21);
   } else {
     doc.setFillColor(254, 226, 226);
     doc.roundedRect(120, currentY + 6, 68, 22, 2, 2, 'F');
     doc.setFont("Helvetica", "bold");
     doc.setTextColor(220, 38, 38);
-    doc.text("OUT OF BALANCE", 128, currentY + 15);
+    doc.text(isCards ? "OUT OF BALANCE" : "FEE WARNING", 126, currentY + 15);
     doc.setFontSize(9);
-    doc.text("Difference: " + formatCurrency(result.netDiscrepancy), 132, currentY + 21);
+    doc.text(isCards ? "Difference: " + formatCurrency(netVal) : "Fee Out of Limit: " + formatCurrency(netVal), 126, currentY + 21);
   }
 
   doc.setTextColor(148, 163, 184);
@@ -2091,13 +2203,16 @@ function exportReportToPDF(id) {
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(11);
   doc.text("Bank Statement Date: " + report.bankDate, 14, 28);
-  doc.text("Trial Balance Range: " + report.tbDateLabel, 14, 34);
+  doc.text("Trial Balance Range: " + computeReportDateLabel(report), 14, 34);
   doc.text("Saved Date: " + new Date(report.timestamp).toLocaleString(), 130, 28);
 
   doc.setDrawColor(226, 232, 240);
   doc.line(14, 38, 196, 38);
 
-  const breakdownHeaders = [["Reconciliation Category", "Ledger Total (CB)", "Bank Statement", "Discrepancy", "Status"]];
+  const breakdownHeaders = isCards 
+    ? [["Reconciliation Category", "Ledger Total (CB)", "Bank Statement", "Discrepancy", "Status"]]
+    : [["Reconciliation Category", "Ledger Total (CB)", "Bank Statement", "Fee (%)", `Fee2 (${amexFeeRateSetting}%)`, "Status"]];
+
   const breakdownRows = [];
   
   // Calculate category sums on the fly from saved report data
@@ -2107,7 +2222,6 @@ function exportReportToPDF(id) {
     let hotelSum = 0;
     let restaurantSum = 0;
     
-    // We sum all dynamic category lines using report's saved categories configuration
     const savedHotelCats = report.hotelCategories || getInitialCategories();
     const savedRestaurantCats = report.restaurantCategories || report.hotelCategories || getInitialCategories();
     
@@ -2115,7 +2229,6 @@ function exportReportToPDF(id) {
     if (hotelCat && report.hotelColumns) {
       report.hotelColumns.forEach(col => {
         hotelCat.lines.forEach(line => {
-          // Fallback legacy remapping check
           const val = col.values[line.id] !== undefined ? col.values[line.id] : col.values[r.id];
           hotelSum += parseMathExpression(val);
         });
@@ -2126,7 +2239,6 @@ function exportReportToPDF(id) {
     if (restCat && report.restaurantColumns) {
       report.restaurantColumns.forEach(col => {
         restCat.lines.forEach(line => {
-          // Fallback legacy remapping check
           const val = col.values[line.id] !== undefined ? col.values[line.id] : col.values[r.id];
           restaurantSum += parseMathExpression(val);
         });
@@ -2156,19 +2268,57 @@ function exportReportToPDF(id) {
     const d2Ledger = tbSums['debit2'];
     const d2Bank = report.bank['debit2'] || 0;
     breakdownRows.push(['Debit 2', formatCurrency(d2Ledger), formatCurrency(d2Bank), formatCurrency(d2Bank - d2Ledger), Math.abs(d2Bank - d2Ledger) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+
+    breakdownRows.push([
+      "TOTALS",
+      formatCurrency(report.totalLedger),
+      formatCurrency(report.totalBank),
+      formatCurrency(report.netDiscrepancy),
+      Math.abs(report.netDiscrepancy) <= 0.005 ? "Balanced" : "Out of Balance"
+    ]);
   } else {
     const amexLedger = tbSums['amex'] + tbSums['amexpos'];
     const amexBank = report.bank['amex'] || 0;
-    breakdownRows.push(['American Express (AMEX)', formatCurrency(amexLedger), formatCurrency(amexBank), formatCurrency(amexBank - amexLedger), Math.abs(amexBank - amexLedger) <= 0.005 ? 'Reconciled' : 'Discrepant']);
-  }
+    const calcFee = amexLedger - amexBank;
+    const calcPercent = amexLedger > 0.005 ? ((calcFee / amexLedger) * 100) : 0;
+    const expectedFee = amexLedger * (amexFeeRateSetting / 100);
 
-  breakdownRows.push([
-    "TOTALS",
-    formatCurrency(report.totalLedger),
-    formatCurrency(report.totalBank),
-    formatCurrency(report.netDiscrepancy),
-    Math.abs(report.netDiscrepancy) <= 0.005 ? "Balanced" : "Out of Balance"
-  ]);
+    let statusText = 'Reconciled';
+    if (calcPercent > amexThresholdRateSetting) {
+      statusText = 'Fee Exceeds Max';
+    } else if (calcFee > expectedFee + 0.005) {
+      statusText = 'Fee Warning';
+    }
+
+    breakdownRows.push([
+      'American Express (AMEX)', 
+      formatCurrency(amexLedger), 
+      formatCurrency(amexBank), 
+      `${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)`, 
+      formatCurrency(expectedFee), 
+      statusText
+    ]);
+
+    const totalCalcFee = report.totalLedger - report.totalBank;
+    const totalCalcPercent = report.totalLedger > 0.005 ? ((totalCalcFee / report.totalLedger) * 100) : 0;
+    const totalExpectedFee = report.totalLedger * (amexFeeRateSetting / 100);
+
+    let rollUpStatus = 'Balanced';
+    if (totalCalcPercent > amexThresholdRateSetting) {
+      rollUpStatus = 'Out of Limit';
+    } else if (totalCalcFee > totalExpectedFee + 0.005) {
+      rollUpStatus = 'Fee Warning';
+    }
+
+    breakdownRows.push([
+      "TOTALS",
+      formatCurrency(report.totalLedger),
+      formatCurrency(report.totalBank),
+      `${formatCurrency(totalCalcFee)} (${totalCalcPercent.toFixed(2)}%)`,
+      formatCurrency(totalExpectedFee),
+      rollUpStatus
+    ]);
+  }
 
   doc.autoTable({
     startY: 44,
@@ -2176,20 +2326,36 @@ function exportReportToPDF(id) {
     body: breakdownRows,
     theme: 'striped',
     headStyles: { fillStyle: 'F', fillColor: [71, 85, 105], textColor: [255, 255, 255], fontStyle: 'bold' },
-    columnStyles: {
+    columnStyles: isCards ? {
       0: { fontStyle: 'bold' },
       1: { halign: 'right' },
       2: { halign: 'right' },
       3: { halign: 'right' },
       4: { halign: 'center' }
+    } : {
+      0: { fontStyle: 'bold' },
+      1: { halign: 'right' },
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+      4: { halign: 'right' },
+      5: { halign: 'center' }
     },
     didParseCell: function (data) {
       if (data.row.index === breakdownRows.length - 1) {
         data.cell.styles.fontStyle = 'bold';
         data.cell.styles.fillColor = [241, 245, 249];
-        if (data.column.index === 3) {
+        
+        if (isCards && data.column.index === 3) {
           if (report.netDiscrepancy > 0.005) data.cell.styles.textColor = [16, 185, 129];
           if (report.netDiscrepancy < -0.005) data.cell.styles.textColor = [239, 68, 68];
+        } else if (!isCards && data.column.index === 3) {
+          const totalCalcFee = report.totalLedger - report.totalBank;
+          const totalCalcPercent = report.totalLedger > 0.005 ? ((totalCalcFee / report.totalLedger) * 100) : 0;
+          if (totalCalcPercent > amexThresholdRateSetting) {
+            data.cell.styles.textColor = [239, 68, 68];
+          } else if (totalCalcFee > (report.totalLedger * (amexFeeRateSetting / 100)) + 0.005) {
+            data.cell.styles.textColor = [245, 158, 11];
+          }
         }
       }
     }
@@ -2210,22 +2376,27 @@ function exportReportToPDF(id) {
   doc.text("Total Ledger Receipts: " + formatCurrency(report.totalLedger), 20, currentY + 18);
   doc.text("Total Bank Deposits:   " + formatCurrency(report.totalBank), 20, currentY + 26);
 
-  if (Math.abs(report.netDiscrepancy) <= 0.005) {
+  const netVal = isCards ? report.netDiscrepancy : (report.totalLedger - report.totalBank);
+  const isBalanced = isCards 
+    ? (Math.abs(report.netDiscrepancy) <= 0.005)
+    : ((report.totalLedger - report.totalBank) <= (report.totalLedger * (amexFeeRateSetting / 100)) + 0.005 && ((report.totalLedger - report.totalBank) / report.totalLedger * 100) <= amexThresholdRateSetting);
+
+  if (isBalanced) {
     doc.setFillColor(209, 250, 229);
     doc.roundedRect(120, currentY + 6, 68, 22, 2, 2, 'F');
     doc.setFont("Helvetica", "bold");
     doc.setTextColor(5, 150, 105);
-    doc.text("RECONCILED", 138, currentY + 15);
+    doc.text(isCards ? "RECONCILED" : "BALANCED", 132, currentY + 15);
     doc.setFontSize(9);
-    doc.text("Zero Net Difference", 136, currentY + 21);
+    doc.text(isCards ? "Zero Net Difference" : "Fee Within Limits", 132, currentY + 21);
   } else {
     doc.setFillColor(254, 226, 226);
     doc.roundedRect(120, currentY + 6, 68, 22, 2, 2, 'F');
     doc.setFont("Helvetica", "bold");
     doc.setTextColor(220, 38, 38);
-    doc.text("OUT OF BALANCE", 128, currentY + 15);
+    doc.text(isCards ? "OUT OF BALANCE" : "FEE WARNING", 126, currentY + 15);
     doc.setFontSize(9);
-    doc.text("Difference: " + formatCurrency(report.netDiscrepancy), 132, currentY + 21);
+    doc.text(isCards ? "Difference: " + formatCurrency(netVal) : "Fee Out of Limit: " + formatCurrency(netVal), 126, currentY + 21);
   }
 
   const compFileStr = report.companyId === 'ws_hospitality' ? 'WS_Hospitality' : 'WS_Hotels';
@@ -2267,34 +2438,87 @@ function downloadSummaryPDF() {
   doc.setDrawColor(226, 232, 240);
   doc.line(14, 44, 196, 44);
 
-  const summaryHeaders = [["TB Date Range", "Bank Date", "Ledger Total (CB)", "Bank Total (Col I)", "Net Discrepancy", "Status"]];
+  const summaryHeaders = isCards
+    ? [["TB Date Range", "Bank Date", "Ledger Total (CB)", "Bank Total (Col I)", "Net Discrepancy", "Status"]]
+    : [["TB Date Range", "Bank Date", "Ledger Total (CB)", "Bank Total (Col I)", "Fee (%)", `Fee2 (${amexFeeRateSetting}%)`, "Status"]];
+    
   let totalLedgerSum = 0;
   let totalBankSum = 0;
   let totalNetDiff = 0;
+  let totalCalcFeeSum = 0;
+  let totalExpectedFeeSum = 0;
 
   const summaryRows = filtered.map(r => {
     totalLedgerSum += r.totalLedger;
     totalBankSum += r.totalBank;
     totalNetDiff += r.netDiscrepancy;
 
-    return [
-      r.tbDateLabel,
-      r.bankDate,
-      formatCurrency(r.totalLedger),
-      formatCurrency(r.totalBank),
-      (r.netDiscrepancy > 0.005 ? '+' : '') + formatCurrency(r.netDiscrepancy),
-      Math.abs(r.netDiscrepancy) <= 0.005 ? "Balanced" : "Discrepant"
-    ];
+    const tbLabel = computeReportDateLabel(r);
+
+    if (isCards) {
+      return [
+        tbLabel,
+        r.bankDate,
+        formatCurrency(r.totalLedger),
+        formatCurrency(r.totalBank),
+        (r.netDiscrepancy > 0.005 ? '+' : '') + formatCurrency(r.netDiscrepancy),
+        Math.abs(r.netDiscrepancy) <= 0.005 ? "Balanced" : "Discrepant"
+      ];
+    } else {
+      const calcFee = r.totalLedger - r.totalBank;
+      const calcPercent = r.totalLedger > 0.005 ? ((calcFee / r.totalLedger) * 100) : 0;
+      const expectedFee = r.totalLedger * (amexFeeRateSetting / 100);
+
+      totalCalcFeeSum += calcFee;
+      totalExpectedFeeSum += expectedFee;
+
+      let status = 'Reconciled';
+      if (calcPercent > amexThresholdRateSetting) {
+        status = 'Fee Exceeds Max';
+      } else if (calcFee > expectedFee + 0.005) {
+        status = 'Fee Warning';
+      }
+
+      return [
+        tbLabel,
+        r.bankDate,
+        formatCurrency(r.totalLedger),
+        formatCurrency(r.totalBank),
+        `${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)`,
+        formatCurrency(expectedFee),
+        status
+      ];
+    }
   });
 
-  summaryRows.push([
-    "ROLL-UP TOTALS",
-    "",
-    formatCurrency(totalLedgerSum),
-    formatCurrency(totalBankSum),
-    (totalNetDiff > 0.005 ? '+' : '') + formatCurrency(totalNetDiff),
-    Math.abs(totalNetDiff) <= 0.005 ? "Balanced" : "Out of Balance"
-  ]);
+  if (isCards) {
+    summaryRows.push([
+      "ROLL-UP TOTALS",
+      "",
+      formatCurrency(totalLedgerSum),
+      formatCurrency(totalBankSum),
+      (totalNetDiff > 0.005 ? '+' : '') + formatCurrency(totalNetDiff),
+      Math.abs(totalNetDiff) <= 0.005 ? "Balanced" : "Out of Balance"
+    ]);
+  } else {
+    const totalCalcPercent = totalLedgerSum > 0.005 ? ((totalCalcFeeSum / totalLedgerSum) * 100) : 0;
+    let rollUpStatus = 'Balanced';
+    if (totalCalcPercent > amexThresholdRateSetting) {
+      rollUpStatus = 'Out of Limit';
+    } else if (totalCalcFeeSum > totalExpectedFeeSum + 0.005) {
+      rollUpStatus = 'Fee Warning';
+    }
+
+    summaryRows.push([
+      "ROLL-UP TOTALS",
+      "",
+      formatCurrency(totalLedgerSum),
+      formatCurrency(totalBankSum),
+      `${formatCurrency(totalCalcFeeSum)} (${totalCalcPercent.toFixed(2)}%)`,
+      formatCurrency(totalExpectedFeeSum),
+      rollUpStatus
+    ]);
+  }
 
   doc.autoTable({
     startY: 50,
@@ -2302,23 +2526,34 @@ function downloadSummaryPDF() {
     body: summaryRows,
     theme: 'striped',
     headStyles: { fillStyle: 'F', fillColor: [100, 116, 139], textColor: [255, 255, 255], fontStyle: 'bold' },
-    columnStyles: {
+    columnStyles: isCards ? {
       0: { fontStyle: 'bold' },
       2: { halign: 'right' },
       3: { halign: 'right' },
       4: { halign: 'right' },
       5: { halign: 'center' }
+    } : {
+      0: { fontStyle: 'bold' },
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+      4: { halign: 'right' },
+      5: { halign: 'right' },
+      6: { halign: 'center' }
     },
     didParseCell: function (data) {
       if (data.row.index === summaryRows.length - 1) {
         data.cell.styles.fontStyle = 'bold';
         data.cell.styles.fillColor = [241, 245, 249];
         
-        if (data.column.index === 4) {
-          if (totalNetDiff > 0.005) {
-            data.cell.styles.textColor = [16, 185, 129];
-          } else if (totalNetDiff < -0.005) {
+        if (isCards && data.column.index === 4) {
+          if (totalNetDiff > 0.005) data.cell.styles.textColor = [16, 185, 129];
+          if (totalNetDiff < -0.005) data.cell.styles.textColor = [239, 68, 68];
+        } else if (!isCards && data.column.index === 4) {
+          const totalCalcPercent = totalLedgerSum > 0.005 ? ((totalCalcFeeSum / totalLedgerSum) * 100) : 0;
+          if (totalCalcPercent > amexThresholdRateSetting) {
             data.cell.styles.textColor = [239, 68, 68];
+          } else if (totalCalcFeeSum > totalExpectedFeeSum + 0.005) {
+            data.cell.styles.textColor = [245, 158, 11];
           }
         }
       }
@@ -2447,11 +2682,32 @@ function copySummaryToClipboard() {
   text += `Restaurant Trial Balance Days: ${restaurantColumns.map(c => c.date).join(', ')}\n`;
   text += `Bank Statement Date: ${document.getElementById('bank-date').value}\n`;
   text += `=========================================\n`;
-  result.rows.forEach(r => {
-    text += `${r.name}: Ledger Total ${formatCurrency(r.ledger)} | Bank Total ${formatCurrency(r.bank)} | Diff: ${(r.diff > 0 ? '+' : '')}${formatCurrency(r.diff)}\n`;
-  });
-  text += `=========================================\n`;
-  text += `NET DISCREPANCY: ${formatCurrency(result.netDiscrepancy)} (${Math.abs(result.netDiscrepancy) <= 0.005 ? 'Balanced' : 'Out of Balance'})\n`;
+  
+  if (activeTab === 'amex') {
+    result.rows.forEach(r => {
+      const calcFee = r.ledger - r.bank;
+      const calcPercent = r.ledger > 0.005 ? ((calcFee / r.ledger) * 100) : 0;
+      const expectedFee = r.ledger * (amexFeeRateSetting / 100);
+      text += `${r.name}: Ledger ${formatCurrency(r.ledger)} | Bank ${formatCurrency(r.bank)} | Fee: ${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%) | Expected Fee2: ${formatCurrency(expectedFee)}\n`;
+    });
+    text += `=========================================\n`;
+    const totalCalcFee = result.totalLedger - result.totalBank;
+    const totalCalcPercent = result.totalLedger > 0.005 ? ((totalCalcFee / result.totalLedger) * 100) : 0;
+    const totalExpectedFee = result.totalLedger * (amexFeeRateSetting / 100);
+    let status = 'Balanced';
+    if (totalCalcPercent > amexThresholdRateSetting) {
+      status = 'Fee Exceeds Max';
+    } else if (totalCalcFee > totalExpectedFee + 0.005) {
+      status = 'Fee Warning';
+    }
+    text += `AMEX FEE SUMMARY: Calculated Fee ${formatCurrency(totalCalcFee)} (${totalCalcPercent.toFixed(2)}%) | Expected Fee2 ${formatCurrency(totalExpectedFee)} (${status})\n`;
+  } else {
+    result.rows.forEach(r => {
+      text += `${r.name}: Ledger Total ${formatCurrency(r.ledger)} | Bank Total ${formatCurrency(r.bank)} | Diff: ${(r.diff > 0 ? '+' : '')}${formatCurrency(r.diff)}\n`;
+    });
+    text += `=========================================\n`;
+    text += `NET DISCREPANCY: ${formatCurrency(result.netDiscrepancy)} (${Math.abs(result.netDiscrepancy) <= 0.005 ? 'Balanced' : 'Out of Balance'})\n`;
+  }
 
   navigator.clipboard.writeText(text)
     .then(() => showToast('Summary copied to clipboard!', 'success'))
