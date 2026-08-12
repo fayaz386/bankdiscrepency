@@ -104,7 +104,14 @@
         </button>
       </div>
       
-      <div class="workspace-actions">
+      <div class="workspace-actions" style="display: flex; gap: 8px; align-items: center;">
+        <select id="select-load-history" class="filter-select" style="max-width: 220px; font-size: 0.8rem; padding: 4px 8px; border-radius: var(--border-radius-sm); display: none;">
+          <option value="">-- Load Saved Report --</option>
+        </select>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh" title="Refresh Data from Server" style="padding: 6px 10px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+          <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
+          <span>Refresh</span>
+        </button>
         <button type="button" class="btn btn-secondary btn-sm admin-only" id="btn-settings-toggle">
           <i data-lucide="settings"></i> User Management
         </button>
@@ -314,7 +321,7 @@
         
         <!-- Live Detailed Breakdown Table -->
         <div class="card recon-card">
-          <h3 class="card-title"><i data-lucide="balance-scale"></i> Live Reconciliation Summary</h3>
+          <h3 class="card-title"><i data-lucide="balance-scale"></i> Live Reconciliation Summary <span id="live-summary-dates" style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;"></span></h3>
           <div class="table-container">
             <table class="recon-table">
               <thead>

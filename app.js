@@ -47,6 +47,7 @@ function getInitialCategories() {
 let currentUser = null;
 let activeCompany = 'ws_hospitality';
 let activeTab = 'live';
+let activeLoadedReportId = null;
 
 // Separate Grid States
 let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa_0: '', mc_0: ''... } }]
@@ -77,7 +78,7 @@ let companyTabsContainer, subTabsContainer;
 let hotelLabelsContainer, hotelColumnsContainer, btnAddHotelCol;
 let restaurantLabelsContainer, restaurantColumnsContainer, btnAddRestaurantCol;
 let bankLabelsContainer, bankColumnsContainer, bankBadgeTitle;
-let btnSave, btnClear, reconTbody;
+let btnSave, btnClear, reconTbody, selectLoadHistory, btnRefresh;
 let totalLedgerDisplay, totalBankDisplay, netDiscrepancyDisplay, discrepancyIcon, discrepancyIconContainer;
 let historyTbody, historyCount, noHistoryMessage;
 let historyFromDate, historyToDate, historyStatusFilter;
@@ -121,6 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSave = document.getElementById('btn-save');
   btnClear = document.getElementById('btn-clear');
   reconTbody = document.getElementById('recon-tbody');
+  selectLoadHistory = document.getElementById('select-load-history');
+  btnRefresh = document.getElementById('btn-refresh');
   
   totalLedgerDisplay = document.getElementById('total-ledger-display');
   totalBankDisplay = document.getElementById('total-bank-display');
@@ -171,6 +174,23 @@ document.addEventListener('DOMContentLoaded', () => {
   
   document.getElementById('reconcile-form').addEventListener('submit', handleSaveReport);
   btnClear.addEventListener('click', handleClearForm);
+  
+  if (selectLoadHistory) {
+    selectLoadHistory.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (val === '') {
+        resetAppInputs();
+      } else {
+        editReportRecord(val);
+      }
+    });
+  }
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', () => {
+      loadDataFromServer();
+      showToast('Data refreshed from server.', 'success');
+    });
+  }
   
   // History exports
   btnExportCsv.addEventListener('click', exportCSV);
@@ -518,6 +538,9 @@ function setupNavigationTabs() {
 }
 
 function resetAppInputs() {
+  activeLoadedReportId = null;
+  if (selectLoadHistory) selectLoadHistory.value = '';
+
   hotelColumns = [];
   restaurantColumns = [];
   
@@ -1014,6 +1037,37 @@ function calculateReconciliation() {
   // Save state globally for exports
   bankValues = result.bank;
 
+  // Update Live Summary date range labels
+  const liveSummaryDates = document.getElementById('live-summary-dates');
+  if (liveSummaryDates) {
+    const hotelDates = hotelColumns.filter(col => {
+      return Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
+    }).map(c => c.date);
+    
+    const restaurantDates = restaurantColumns.filter(col => {
+      return Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
+    }).map(c => c.date);
+    
+    let allDates = [...hotelDates, ...restaurantDates].sort();
+    if (allDates.length === 0) {
+      allDates = [...hotelColumns, ...restaurantColumns].map(c => c.date).sort();
+    }
+    const sortedUniqueDates = [...new Set(allDates)].filter(Boolean);
+    
+    if (sortedUniqueDates.length === 1) {
+      const options = { month: 'short', day: 'numeric' };
+      const dateFmt = new Date(sortedUniqueDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
+      liveSummaryDates.textContent = `(${dateFmt})`;
+    } else if (sortedUniqueDates.length > 1) {
+      const options = { month: 'short', day: 'numeric' };
+      const startFmt = new Date(sortedUniqueDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
+      const endFmt = new Date(sortedUniqueDates[sortedUniqueDates.length - 1] + 'T00:00:00').toLocaleDateString('en-US', options);
+      liveSummaryDates.textContent = `(${startFmt} - ${endFmt})`;
+    } else {
+      liveSummaryDates.textContent = '';
+    }
+  }
+
   // Render to Live Table
   reconTbody.innerHTML = '';
   result.rows.forEach(r => {
@@ -1118,15 +1172,30 @@ function handleSaveReport(e) {
 
   // Create range label for history
   let tbDateLabel = '';
-  const allDates = [...hotelColumns, ...restaurantColumns].map(c => c.date).sort();
-  const sortedUniqueDates = [...new Set(allDates)];
+  const hotelDates = hotelColumns.filter(col => {
+    return Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
+  }).map(c => c.date);
+  
+  const restaurantDates = restaurantColumns.filter(col => {
+    return Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
+  }).map(c => c.date);
+  
+  let allDates = [...hotelDates, ...restaurantDates].sort();
+  if (allDates.length === 0) {
+    allDates = [...hotelColumns, ...restaurantColumns].map(c => c.date).sort();
+  }
+  const sortedUniqueDates = [...new Set(allDates)].filter(Boolean);
+
   if (sortedUniqueDates.length === 1) {
-    tbDateLabel = sortedUniqueDates[0];
-  } else {
+    const options = { month: 'short', day: 'numeric' };
+    tbDateLabel = new Date(sortedUniqueDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
+  } else if (sortedUniqueDates.length > 1) {
     const options = { month: 'short', day: 'numeric' };
     const startFmt = new Date(sortedUniqueDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
     const endFmt = new Date(sortedUniqueDates[sortedUniqueDates.length - 1] + 'T00:00:00').toLocaleDateString('en-US', options);
     tbDateLabel = `${startFmt} - ${endFmt}`;
+  } else {
+    tbDateLabel = 'No Dates';
   }
 
   const primaryDate = sortedUniqueDates[0] || formatDate(new Date());
@@ -1165,7 +1234,16 @@ function handleSaveReport(e) {
     })
     .then(data => {
       showToast(data.message || 'Report saved successfully!', 'success');
+      resetAppInputs();
       loadDataFromServer();
+      
+      // Switch active tab to LIVE status dashboard
+      activeTab = 'live';
+      const subButtons = subTabsContainer.querySelectorAll('.sub-tab');
+      subButtons.forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-tab') === 'live');
+      });
+      toggleWorkspaceView('live');
     })
     .catch(err => {
       console.error(err);
@@ -1197,6 +1275,7 @@ window.deleteReportRecord = function(id) {
 window.editReportRecord = function(id) {
   const report = history.find(r => r.id === id);
   if (report) {
+    activeLoadedReportId = id;
     activeCompany = report.companyId;
     activeTab = report.reconType;
     
@@ -1283,6 +1362,7 @@ window.editReportRecord = function(id) {
 
     calculateReconciliation();
     toggleSettingsView(false);
+    populateHistoryDropdown();
     showToast(`Loaded report for Bank Date ${report.bankDate}.`, 'success');
   }
 };
@@ -2018,6 +2098,10 @@ function toggleWorkspaceView(mode) {
       companyTabsContainer.classList.add('hidden');
     }
 
+    if (selectLoadHistory) {
+      selectLoadHistory.style.display = 'none';
+    }
+
     loadLiveStatusBoard();
   } else {
     if (liveSection) {
@@ -2058,6 +2142,11 @@ function toggleWorkspaceView(mode) {
     if (companyTabsContainer) {
       companyTabsContainer.style.display = '';
       companyTabsContainer.classList.remove('hidden');
+    }
+
+    if (selectLoadHistory) {
+      selectLoadHistory.style.display = '';
+      populateHistoryDropdown();
     }
 
     lucide.createIcons();
@@ -2203,3 +2292,29 @@ window.loadLiveStatusBoard = function() {
       container.innerHTML = '<div class="empty-state"><p class="val-negative">Error loading status board details.</p></div>';
     });
 };
+
+function populateHistoryDropdown() {
+  if (!selectLoadHistory) return;
+  selectLoadHistory.innerHTML = '';
+  
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = '-- Load Saved Report --';
+  selectLoadHistory.appendChild(defaultOption);
+
+  // Filter local history array for activeCompany and activeTab
+  const filtered = history.filter(r => r.companyId === activeCompany && r.reconType === activeTab);
+  // Sort chronologically descending
+  filtered.sort((a, b) => b.timestamp - a.timestamp);
+
+  filtered.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.id;
+    opt.textContent = `${r.bankDate} (${r.tbDateLabel})`;
+    selectLoadHistory.appendChild(opt);
+  });
+  
+  if (activeLoadedReportId) {
+    selectLoadHistory.value = activeLoadedReportId;
+  }
+}
