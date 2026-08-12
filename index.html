@@ -207,6 +207,12 @@
           <label for="live-to-date" style="font-size: 0.75rem; color: var(--text-secondary);">To</label>
           <input type="date" id="live-to-date" class="filter-select" style="padding: 2px 6px; font-size: 0.75rem; width: 120px; height: 24px; border-radius: var(--border-radius-sm);">
         </div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-left: auto;">
+          <label for="live-history-select" style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">Or Select Saved Run</label>
+          <select id="live-history-select" class="filter-select" style="padding: 2px 6px; font-size: 0.75rem; width: 180px; height: 24px; border-radius: var(--border-radius-sm);">
+            <option value="">-- Latest Saved --</option>
+          </select>
+        </div>
         <button type="button" class="btn btn-secondary btn-sm" id="btn-clear-live-dates" style="padding: 2px 8px; font-size: 0.7rem; height: 24px; display: flex; align-items: center; justify-content: center;">Clear</button>
       </div>
 

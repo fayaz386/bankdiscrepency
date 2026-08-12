@@ -83,7 +83,7 @@ let bankLabelsContainer, bankColumnsContainer, bankBadgeTitle;
 let btnSave, btnClear, reconTbody, selectLoadHistory, btnRefresh;
 let totalLedgerDisplay, totalBankDisplay, netDiscrepancyDisplay, discrepancyIcon, discrepancyIconContainer;
 let historyTbody, historyCount, noHistoryMessage;
-let historyFromDate, historyToDate, historyStatusFilter, liveFromDate, liveToDate, btnClearLiveDates;
+let historyFromDate, historyToDate, historyStatusFilter, liveFromDate, liveToDate, btnClearLiveDates, liveHistorySelect;
 let btnExportCsv, btnExportSummaryPdf, btnCopySummary, btnPrintReport, btnDownloadPdf;
 let usersTbody, addUserForm, newUsername, newPassword, newRole;
 
@@ -144,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
   liveFromDate = document.getElementById('live-from-date');
   liveToDate = document.getElementById('live-to-date');
   btnClearLiveDates = document.getElementById('btn-clear-live-dates');
+  liveHistorySelect = document.getElementById('live-history-select');
   
   btnExportCsv = document.getElementById('btn-export-csv');
   btnExportSummaryPdf = document.getElementById('btn-export-summary-pdf');
@@ -211,15 +212,29 @@ document.addEventListener('DOMContentLoaded', () => {
   historyStatusFilter.addEventListener('change', renderHistoryTable);
   
   if (liveFromDate) {
-    liveFromDate.addEventListener('change', loadLiveStatusBoard);
+    liveFromDate.addEventListener('change', () => {
+      if (liveHistorySelect) liveHistorySelect.value = '';
+      loadLiveStatusBoard();
+    });
   }
   if (liveToDate) {
-    liveToDate.addEventListener('change', loadLiveStatusBoard);
+    liveToDate.addEventListener('change', () => {
+      if (liveHistorySelect) liveHistorySelect.value = '';
+      loadLiveStatusBoard();
+    });
+  }
+  if (liveHistorySelect) {
+    liveHistorySelect.addEventListener('change', () => {
+      if (liveFromDate) liveFromDate.value = '';
+      if (liveToDate) liveToDate.value = '';
+      loadLiveStatusBoard();
+    });
   }
   if (btnClearLiveDates) {
     btnClearLiveDates.addEventListener('click', () => {
       if (liveFromDate) liveFromDate.value = '';
       if (liveToDate) liveToDate.value = '';
+      if (liveHistorySelect) liveHistorySelect.value = '';
       loadLiveStatusBoard();
     });
   }
@@ -1501,7 +1516,7 @@ function renderHistoryTable() {
       : 'N/A';
 
     row.innerHTML = `
-      <td><strong>${r.tbDateLabel}</strong></td>
+      <td><strong>${computeReportDateLabel(r)}</strong></td>
       <td>${r.bankDate}</td>
       <td class="num-col">${formatCurrency(r.totalLedger)}</td>
       <td class="num-col">${formatCurrency(r.totalBank)}</td>
@@ -2090,6 +2105,37 @@ function formatDate(date) {
   return `${year}-${month}-${day}`;
 }
 
+function computeReportDateLabel(report) {
+  if (!report) return 'No Dates';
+  const hotelCols = report.hotelColumns || [];
+  const restaurantCols = report.restaurantColumns || [];
+  
+  const hotelDates = hotelCols.filter(col => {
+    return col.values && Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
+  }).map(c => c.date);
+  
+  const restaurantDates = restaurantCols.filter(col => {
+    return col.values && Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
+  }).map(c => c.date);
+  
+  let allDates = [...hotelDates, ...restaurantDates].sort();
+  if (allDates.length === 0) {
+    allDates = [...hotelCols, ...restaurantCols].map(c => c.date).sort();
+  }
+  const sortedUniqueDates = [...new Set(allDates)].filter(Boolean);
+  
+  if (sortedUniqueDates.length === 1) {
+    const options = { month: 'short', day: 'numeric' };
+    return new Date(sortedUniqueDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
+  } else if (sortedUniqueDates.length > 1) {
+    const options = { month: 'short', day: 'numeric' };
+    const startFmt = new Date(sortedUniqueDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
+    const endFmt = new Date(sortedUniqueDates[sortedUniqueDates.length - 1] + 'T00:00:00').toLocaleDateString('en-US', options);
+    return `${startFmt} - ${endFmt}`;
+  }
+  return report.tbDateLabel || 'No Dates';
+}
+
 function formatCurrency(amount) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -2273,15 +2319,33 @@ window.loadLiveStatusBoard = function() {
 
   const fromVal = liveFromDate ? liveFromDate.value : '';
   const toVal = liveToDate ? liveToDate.value : '';
-  const isFiltered = fromVal || toVal;
+  const selectedHistoryDate = liveHistorySelect ? liveHistorySelect.value : '';
+  const isFiltered = fromVal || toVal || selectedHistoryDate;
 
-  const fetchUrl = isFiltered ? '/api/all-history' : '/api/latest-status';
-
-  fetch(fetchUrl)
+  // We fetch the complete history to either list, aggregate, or load historical snapshots
+  fetch('/api/all-history')
     .then(res => res.json())
     .then(rawList => {
       container.innerHTML = '';
       
+      // Populate unique bankDate runs in dropdown list if not already done
+      if (liveHistorySelect) {
+        const currentSel = liveHistorySelect.value;
+        liveHistorySelect.innerHTML = '<option value="">-- Latest Saved --</option>';
+        
+        const uniqueHistoryDates = Array.from(new Set(rawList.map(r => r.bankDate).filter(Boolean)));
+        uniqueHistoryDates.sort((a, b) => new Date(b) - new Date(a));
+        
+        uniqueHistoryDates.forEach(dateStr => {
+          const opt = document.createElement('option');
+          opt.value = dateStr;
+          opt.textContent = dateStr;
+          liveHistorySelect.appendChild(opt);
+        });
+        
+        liveHistorySelect.value = currentSel;
+      }
+
       const companies = [
         { id: 'ws_hospitality', title: 'WS Hospitality', icon: 'building' },
         { id: 'ws_hotels', title: 'WS Hotels', icon: 'hotel' }
@@ -2289,7 +2353,39 @@ window.loadLiveStatusBoard = function() {
 
       let processedData = [];
 
-      if (isFiltered) {
+      if (selectedHistoryDate) {
+        // Show only the reports matching this specific selected bankDate exactly
+        const combos = [
+          { companyId: 'ws_hospitality', reconType: 'cards' },
+          { companyId: 'ws_hospitality', reconType: 'amex' },
+          { companyId: 'ws_hotels', reconType: 'cards' },
+          { companyId: 'ws_hotels', reconType: 'amex' }
+        ];
+
+        combos.forEach(combo => {
+          const match = rawList.find(r => r.companyId === combo.companyId && r.reconType === combo.reconType && r.bankDate === selectedHistoryDate);
+          if (match) {
+            processedData.push({
+              companyId: combo.companyId,
+              reconType: combo.reconType,
+              hasReport: true,
+              tbDateLabel: computeReportDateLabel(match),
+              bankDate: match.bankDate,
+              totalLedger: match.totalLedger,
+              totalBank: match.totalBank,
+              netDiscrepancy: match.netDiscrepancy,
+              timestamp: match.timestamp
+            });
+          } else {
+            processedData.push({
+              companyId: combo.companyId,
+              reconType: combo.reconType,
+              hasReport: false
+            });
+          }
+        });
+      } else if (fromVal || toVal) {
+        // Aggregate sum over selected date range
         const combos = [
           { companyId: 'ws_hospitality', reconType: 'cards' },
           { companyId: 'ws_hospitality', reconType: 'amex' },
@@ -2299,17 +2395,11 @@ window.loadLiveStatusBoard = function() {
 
         combos.forEach(combo => {
           let matches = rawList.filter(r => r.companyId === combo.companyId && r.reconType === combo.reconType);
-          
-          if (fromVal) {
-            matches = matches.filter(r => r.bankDate >= fromVal);
-          }
-          if (toVal) {
-            matches = matches.filter(r => r.bankDate <= toVal);
-          }
+          if (fromVal) matches = matches.filter(r => r.bankDate >= fromVal);
+          if (toVal) matches = matches.filter(r => r.bankDate <= toVal);
 
           if (matches.length > 0) {
             matches.sort((a, b) => new Date(a.bankDate) - new Date(b.bankDate));
-            
             const totalLedger = matches.reduce((sum, r) => sum + (r.totalLedger || 0), 0);
             const totalBank = matches.reduce((sum, r) => sum + (r.totalBank || 0), 0);
             const netDiscrepancy = totalBank - totalLedger;
@@ -2317,7 +2407,7 @@ window.loadLiveStatusBoard = function() {
             const earliest = matches[0].bankDate;
             const latest = matches[matches.length - 1].bankDate;
             const rangeLabel = earliest === latest ? earliest : `${earliest} to ${latest}`;
-            
+
             processedData.push({
               companyId: combo.companyId,
               reconType: combo.reconType,
@@ -2338,15 +2428,36 @@ window.loadLiveStatusBoard = function() {
           }
         });
       } else {
-        processedData = rawList.map(item => {
-          if (item && item.hasReport) {
-            return item;
+        // Default: Show the single latest saved report for each combo
+        const combos = [
+          { companyId: 'ws_hospitality', reconType: 'cards' },
+          { companyId: 'ws_hospitality', reconType: 'amex' },
+          { companyId: 'ws_hotels', reconType: 'cards' },
+          { companyId: 'ws_hotels', reconType: 'amex' }
+        ];
+
+        combos.forEach(combo => {
+          const companyHistory = rawList.filter(r => r.companyId === combo.companyId && r.reconType === combo.reconType);
+          if (companyHistory.length > 0) {
+            companyHistory.sort((a, b) => b.timestamp - a.timestamp);
+            const latestMatch = companyHistory[0];
+            processedData.push({
+              companyId: combo.companyId,
+              reconType: combo.reconType,
+              hasReport: true,
+              tbDateLabel: computeReportDateLabel(latestMatch),
+              bankDate: latestMatch.bankDate,
+              totalLedger: latestMatch.totalLedger,
+              totalBank: latestMatch.totalBank,
+              netDiscrepancy: latestMatch.netDiscrepancy,
+              timestamp: latestMatch.timestamp
+            });
           } else {
-            return {
-              companyId: item.companyId,
-              reconType: item.reconType,
+            processedData.push({
+              companyId: combo.companyId,
+              reconType: combo.reconType,
               hasReport: false
-            };
+            });
           }
         });
       }
