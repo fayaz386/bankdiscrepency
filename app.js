@@ -48,6 +48,8 @@ let currentUser = null;
 let activeCompany = 'ws_hospitality';
 let activeTab = 'live';
 let activeLoadedReportId = null;
+let historySortColumn = 'timestamp';
+let historySortAscending = false;
 
 // Separate Grid States
 let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa_0: '', mc_0: ''... } }]
@@ -81,7 +83,7 @@ let bankLabelsContainer, bankColumnsContainer, bankBadgeTitle;
 let btnSave, btnClear, reconTbody, selectLoadHistory, btnRefresh;
 let totalLedgerDisplay, totalBankDisplay, netDiscrepancyDisplay, discrepancyIcon, discrepancyIconContainer;
 let historyTbody, historyCount, noHistoryMessage;
-let historyFromDate, historyToDate, historyStatusFilter;
+let historyFromDate, historyToDate, historyStatusFilter, liveFromDate, liveToDate, btnClearLiveDates;
 let btnExportCsv, btnExportSummaryPdf, btnCopySummary, btnPrintReport, btnDownloadPdf;
 let usersTbody, addUserForm, newUsername, newPassword, newRole;
 
@@ -138,6 +140,10 @@ document.addEventListener('DOMContentLoaded', () => {
   historyFromDate = document.getElementById('history-from-date');
   historyToDate = document.getElementById('history-to-date');
   historyStatusFilter = document.getElementById('history-status-filter');
+  
+  liveFromDate = document.getElementById('live-from-date');
+  liveToDate = document.getElementById('live-to-date');
+  btnClearLiveDates = document.getElementById('btn-clear-live-dates');
   
   btnExportCsv = document.getElementById('btn-export-csv');
   btnExportSummaryPdf = document.getElementById('btn-export-summary-pdf');
@@ -203,6 +209,20 @@ document.addEventListener('DOMContentLoaded', () => {
   historyFromDate.addEventListener('change', renderHistoryTable);
   historyToDate.addEventListener('change', renderHistoryTable);
   historyStatusFilter.addEventListener('change', renderHistoryTable);
+  
+  if (liveFromDate) {
+    liveFromDate.addEventListener('change', loadLiveStatusBoard);
+  }
+  if (liveToDate) {
+    liveToDate.addEventListener('change', loadLiveStatusBoard);
+  }
+  if (btnClearLiveDates) {
+    btnClearLiveDates.addEventListener('click', () => {
+      if (liveFromDate) liveFromDate.value = '';
+      if (liveToDate) liveToDate.value = '';
+      loadLiveStatusBoard();
+    });
+  }
 
   // Global click listeners
   document.addEventListener('click', (e) => {
@@ -1039,32 +1059,49 @@ function calculateReconciliation() {
 
   // Update Live Summary date range labels
   const liveSummaryDates = document.getElementById('live-summary-dates');
+  const summaryTbDateVal = document.getElementById('summary-tb-date-val');
+  const summaryBankDateVal = document.getElementById('summary-bank-date-val');
+
+  const hotelDates = hotelColumns.filter(col => {
+    return Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
+  }).map(c => c.date);
+  
+  const restaurantDates = restaurantColumns.filter(col => {
+    return Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
+  }).map(c => c.date);
+  
+  let allDates = [...hotelDates, ...restaurantDates].sort();
+  if (allDates.length === 0) {
+    allDates = [...hotelColumns, ...restaurantColumns].map(c => c.date).sort();
+  }
+  const sortedUniqueDates = [...new Set(allDates)].filter(Boolean);
+  
+  let dateRangeStr = '';
+  if (sortedUniqueDates.length === 1) {
+    const options = { month: 'short', day: 'numeric' };
+    dateRangeStr = new Date(sortedUniqueDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
+  } else if (sortedUniqueDates.length > 1) {
+    const options = { month: 'short', day: 'numeric' };
+    const startFmt = new Date(sortedUniqueDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
+    const endFmt = new Date(sortedUniqueDates[sortedUniqueDates.length - 1] + 'T00:00:00').toLocaleDateString('en-US', options);
+    dateRangeStr = `${startFmt} - ${endFmt}`;
+  }
+
   if (liveSummaryDates) {
-    const hotelDates = hotelColumns.filter(col => {
-      return Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
-    }).map(c => c.date);
-    
-    const restaurantDates = restaurantColumns.filter(col => {
-      return Object.values(col.values).some(v => v !== '' && parseFloat(v) !== 0);
-    }).map(c => c.date);
-    
-    let allDates = [...hotelDates, ...restaurantDates].sort();
-    if (allDates.length === 0) {
-      allDates = [...hotelColumns, ...restaurantColumns].map(c => c.date).sort();
-    }
-    const sortedUniqueDates = [...new Set(allDates)].filter(Boolean);
-    
-    if (sortedUniqueDates.length === 1) {
-      const options = { month: 'short', day: 'numeric' };
-      const dateFmt = new Date(sortedUniqueDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
-      liveSummaryDates.textContent = `(${dateFmt})`;
-    } else if (sortedUniqueDates.length > 1) {
-      const options = { month: 'short', day: 'numeric' };
-      const startFmt = new Date(sortedUniqueDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
-      const endFmt = new Date(sortedUniqueDates[sortedUniqueDates.length - 1] + 'T00:00:00').toLocaleDateString('en-US', options);
-      liveSummaryDates.textContent = `(${startFmt} - ${endFmt})`;
+    liveSummaryDates.textContent = dateRangeStr ? `(${dateRangeStr})` : '';
+  }
+
+  if (summaryTbDateVal) {
+    summaryTbDateVal.textContent = dateRangeStr || 'N/A';
+  }
+
+  if (summaryBankDateVal) {
+    const bankDateInput = document.getElementById('bank-date');
+    if (bankDateInput && bankDateInput.value) {
+      const options = { month: 'short', day: 'numeric', year: 'numeric' };
+      summaryBankDateVal.textContent = new Date(bankDateInput.value + 'T00:00:00').toLocaleDateString('en-US', options);
     } else {
-      liveSummaryDates.textContent = '';
+      summaryBankDateVal.textContent = 'N/A';
     }
   }
 
@@ -1223,32 +1260,49 @@ function handleSaveReport(e) {
 
   showToast('Saving report to database...', 'info');
 
-  fetch('/api/history', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(report)
-  })
-    .then(res => {
-      if (!res.ok) throw new Error('Failed to save to database');
-      return res.json();
+  const performSave = () => {
+    fetch('/api/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(report)
     })
-    .then(data => {
-      showToast(data.message || 'Report saved successfully!', 'success');
-      resetAppInputs();
-      loadDataFromServer();
-      
-      // Switch active tab to LIVE status dashboard
-      activeTab = 'live';
-      const subButtons = subTabsContainer.querySelectorAll('.sub-tab');
-      subButtons.forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-tab') === 'live');
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to save to database');
+        return res.json();
+      })
+      .then(data => {
+        showToast(data.message || 'Report saved successfully!', 'success');
+        resetAppInputs();
+        loadDataFromServer();
+        
+        // Switch active tab to LIVE status dashboard
+        activeTab = 'live';
+        const subButtons = subTabsContainer.querySelectorAll('.sub-tab');
+        subButtons.forEach(btn => {
+          btn.classList.toggle('active', btn.getAttribute('data-tab') === 'live');
+        });
+        toggleWorkspaceView('live');
+      })
+      .catch(err => {
+        console.error(err);
+        showToast('Error saving report to server', 'error');
       });
-      toggleWorkspaceView('live');
-    })
-    .catch(err => {
-      console.error(err);
-      showToast('Error saving report to server', 'error');
-    });
+  };
+
+  // If editing and the date is modified, delete the old ID key first to prevent duplicates!
+  if (activeLoadedReportId && activeLoadedReportId !== reportId) {
+    fetch(`/api/history/${activeLoadedReportId}`, { method: 'DELETE' })
+      .then(res => {
+        if (!res.ok) console.warn('Could not delete old record key during edit update');
+        performSave();
+      })
+      .catch(err => {
+        console.error(err);
+        performSave();
+      });
+  } else {
+    performSave();
+  }
 }
 
 window.deleteReportRecord = function(id) {
@@ -1389,21 +1443,62 @@ function getFilteredHistory() {
 
 function renderHistoryTable() {
   const filtered = getFilteredHistory();
-  historyTbody.innerHTML = '';
-  historyCount.textContent = `${filtered.length} report${filtered.length === 1 ? '' : 's'}`;
+  
+  // Sort the filtered array
+  const sorted = [...filtered];
+  sorted.sort((a, b) => {
+    let valA = a[historySortColumn];
+    let valB = b[historySortColumn];
 
-  if (filtered.length === 0) {
+    if (historySortColumn === 'status') {
+      valA = Math.abs(a.netDiscrepancy) <= 0.005 ? 'balanced' : 'discrepant';
+      valB = Math.abs(b.netDiscrepancy) <= 0.005 ? 'balanced' : 'discrepant';
+    }
+
+    if (valA === undefined || valA === null) valA = '';
+    if (valB === undefined || valB === null) valB = '';
+
+    if (typeof valA === 'string') {
+      return historySortAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    } else {
+      return historySortAscending ? valA - valB : valB - valA;
+    }
+  });
+
+  // Update sort icons in DOM
+  const columnsList = ['tbDateLabel', 'bankDate', 'totalLedger', 'totalBank', 'netDiscrepancy', 'status', 'timestamp'];
+  columnsList.forEach(col => {
+    const indicator = document.getElementById(`sort-icon-${col}`);
+    if (indicator) {
+      if (historySortColumn === col) {
+        indicator.innerHTML = historySortAscending ? '▲' : '▼';
+        indicator.style.color = 'var(--accent-blue)';
+      } else {
+        indicator.innerHTML = '⇅';
+        indicator.style.color = 'var(--text-muted)';
+      }
+    }
+  });
+
+  historyTbody.innerHTML = '';
+  historyCount.textContent = `${sorted.length} report${sorted.length === 1 ? '' : 's'}`;
+
+  if (sorted.length === 0) {
     noHistoryMessage.classList.remove('hidden');
     return;
   }
   noHistoryMessage.classList.add('hidden');
 
-  filtered.forEach(r => {
+  sorted.forEach(r => {
     const row = document.createElement('tr');
     const diffClass = r.netDiscrepancy > 0.005 ? 'val-positive' : (r.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
     const statusText = Math.abs(r.netDiscrepancy) <= 0.005 
       ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>' 
       : '<span class="status-pill status-discrepant"><i data-lucide="alert-triangle"></i> Discrepant</span>';
+
+    const timeStr = r.timestamp 
+      ? new Date(r.timestamp).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' }) 
+      : 'N/A';
 
     row.innerHTML = `
       <td><strong>${r.tbDateLabel}</strong></td>
@@ -1412,6 +1507,7 @@ function renderHistoryTable() {
       <td class="num-col">${formatCurrency(r.totalBank)}</td>
       <td class="num-col ${diffClass}">${r.netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(r.netDiscrepancy)}</td>
       <td>${statusText}</td>
+      <td style="font-size: 0.75rem; color: var(--text-secondary);">${timeStr}</td>
       <td class="actions-col">
         <div class="action-icon-buttons">
           <button class="btn-table-action" onclick="editReportRecord('${r.id}')" title="Edit / Load"><i data-lucide="edit"></i></button>
@@ -1431,6 +1527,16 @@ function renderHistoryTable() {
 
   lucide.createIcons();
 }
+
+window.sortHistory = function(column) {
+  if (historySortColumn === column) {
+    historySortAscending = !historySortAscending;
+  } else {
+    historySortColumn = column;
+    historySortAscending = false;
+  }
+  renderHistoryTable();
+};
 
 // --- ANALYTICS CHARTS ---
 
@@ -2165,20 +2271,90 @@ window.loadLiveStatusBoard = function() {
   `;
   lucide.createIcons();
 
-  fetch('/api/latest-status')
-    .then(res => res.json())
-    .then(data => {
-      container.innerHTML = '';
-      if (!data || data.length === 0) {
-        container.innerHTML = '<div class="empty-state"><p>No reports found in system.</p></div>';
-        return;
-      }
+  const fromVal = liveFromDate ? liveFromDate.value : '';
+  const toVal = liveToDate ? liveToDate.value : '';
+  const isFiltered = fromVal || toVal;
 
-      // Group into WS Hospitality and WS Hotels
+  const fetchUrl = isFiltered ? '/api/all-history' : '/api/latest-status';
+
+  fetch(fetchUrl)
+    .then(res => res.json())
+    .then(rawList => {
+      container.innerHTML = '';
+      
       const companies = [
         { id: 'ws_hospitality', title: 'WS Hospitality', icon: 'building' },
         { id: 'ws_hotels', title: 'WS Hotels', icon: 'hotel' }
       ];
+
+      let processedData = [];
+
+      if (isFiltered) {
+        const combos = [
+          { companyId: 'ws_hospitality', reconType: 'cards' },
+          { companyId: 'ws_hospitality', reconType: 'amex' },
+          { companyId: 'ws_hotels', reconType: 'cards' },
+          { companyId: 'ws_hotels', reconType: 'amex' }
+        ];
+
+        combos.forEach(combo => {
+          let matches = rawList.filter(r => r.companyId === combo.companyId && r.reconType === combo.reconType);
+          
+          if (fromVal) {
+            matches = matches.filter(r => r.bankDate >= fromVal);
+          }
+          if (toVal) {
+            matches = matches.filter(r => r.bankDate <= toVal);
+          }
+
+          if (matches.length > 0) {
+            matches.sort((a, b) => new Date(a.bankDate) - new Date(b.bankDate));
+            
+            const totalLedger = matches.reduce((sum, r) => sum + (r.totalLedger || 0), 0);
+            const totalBank = matches.reduce((sum, r) => sum + (r.totalBank || 0), 0);
+            const netDiscrepancy = totalBank - totalLedger;
+
+            const earliest = matches[0].bankDate;
+            const latest = matches[matches.length - 1].bankDate;
+            const rangeLabel = earliest === latest ? earliest : `${earliest} to ${latest}`;
+            
+            processedData.push({
+              companyId: combo.companyId,
+              reconType: combo.reconType,
+              hasReport: true,
+              tbDateLabel: `Aggregated Summary`,
+              bankDate: rangeLabel,
+              totalLedger,
+              totalBank,
+              netDiscrepancy,
+              timestamp: matches[matches.length - 1].timestamp
+            });
+          } else {
+            processedData.push({
+              companyId: combo.companyId,
+              reconType: combo.reconType,
+              hasReport: false
+            });
+          }
+        });
+      } else {
+        processedData = rawList.map(item => {
+          if (item && item.hasReport) {
+            return item;
+          } else {
+            return {
+              companyId: item.companyId,
+              reconType: item.reconType,
+              hasReport: false
+            };
+          }
+        });
+      }
+
+      if (processedData.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No reports found in system.</p></div>';
+        return;
+      }
 
       companies.forEach(company => {
         const companyCard = document.createElement('div');
@@ -2211,7 +2387,7 @@ window.loadLiveStatusBoard = function() {
         ];
 
         types.forEach((type, idx) => {
-          const item = data.find(d => d.companyId === company.id && d.reconType === type.key);
+          const item = processedData.find(d => d.companyId === company.id && d.reconType === type.key);
           
           const section = document.createElement('div');
           section.style.display = 'flex';

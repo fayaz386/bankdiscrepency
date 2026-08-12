@@ -204,6 +204,12 @@ app.get('/api/latest-status', (req, res) => {
   res.json(result);
 });
 
+// Get all history records across all companies and categories
+app.get('/api/all-history', (req, res) => {
+  const history = readJSON(HISTORY_FILE);
+  res.json(history);
+});
+
 // Save or update a segmented report
 app.post('/api/history', (req, res) => {
   const report = req.body;

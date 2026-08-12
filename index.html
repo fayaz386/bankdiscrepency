@@ -192,7 +192,25 @@
           <i data-lucide="refresh-cw"></i> Refresh Status
         </button>
       </div>
-      <div class="live-status-grid" id="live-status-grid-container">
+      
+      <!-- Live Dashboard Filters -->
+      <div class="live-dashboard-filters" style="display: flex; gap: 12px; align-items: center; padding: 8px 12px; background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); margin: 0.25rem 1rem 0.5rem 1rem; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="filter" style="width: 14px; height: 14px; color: var(--accent-blue);"></i>
+          <span style="font-size: 0.75rem; font-weight: bold; color: var(--text-primary);">Filter Summary Period:</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <label for="live-from-date" style="font-size: 0.75rem; color: var(--text-secondary);">From</label>
+          <input type="date" id="live-from-date" class="filter-select" style="padding: 2px 6px; font-size: 0.75rem; width: 120px; height: 24px; border-radius: var(--border-radius-sm);">
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <label for="live-to-date" style="font-size: 0.75rem; color: var(--text-secondary);">To</label>
+          <input type="date" id="live-to-date" class="filter-select" style="padding: 2px 6px; font-size: 0.75rem; width: 120px; height: 24px; border-radius: var(--border-radius-sm);">
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-clear-live-dates" style="padding: 2px 8px; font-size: 0.7rem; height: 24px; display: flex; align-items: center; justify-content: center;">Clear</button>
+      </div>
+
+      <div class="live-status-grid" id="live-status-grid-container" style="padding: 0 1rem 1rem 1rem;">
         <!-- Dynamic cards injected by JS -->
       </div>
     </section>
@@ -322,6 +340,12 @@
         <!-- Live Detailed Breakdown Table -->
         <div class="card recon-card">
           <h3 class="card-title"><i data-lucide="balance-scale"></i> Live Reconciliation Summary <span id="live-summary-dates" style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 8px;"></span></h3>
+          <!-- Live Metadata Dates Indicator -->
+          <div class="recon-summary-meta" style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 8px; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+            <span><i data-lucide="calendar" style="width: 13px; height: 13px; vertical-align: text-bottom; margin-right: 4px; color: var(--accent-blue);"></i> TB Period: <strong id="summary-tb-date-val" style="color: var(--text-primary);">N/A</strong></span>
+            <span><i data-lucide="building-2" style="width: 13px; height: 13px; vertical-align: text-bottom; margin-right: 4px; color: var(--accent-blue);"></i> Bank Date: <strong id="summary-bank-date-val" style="color: var(--text-primary);">N/A</strong></span>
+          </div>
+
           <div class="table-container">
             <table class="recon-table">
               <thead>
@@ -437,12 +461,27 @@
           <table class="history-table">
             <thead>
               <tr>
-                <th>TB Range / Date</th>
-                <th>Bank Date</th>
-                <th class="num-col">Total Ledger Receipts</th>
-                <th class="num-col">Total Bank Deposits</th>
-                <th class="num-col">Net Discrepancy</th>
-                <th>Status</th>
+                <th onclick="sortHistory('tbDateLabel')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+                  TB Range / Date <span id="sort-icon-tbDateLabel" style="font-size: 0.7rem; margin-left: 4px;"></span>
+                </th>
+                <th onclick="sortHistory('bankDate')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+                  Bank Date <span id="sort-icon-bankDate" style="font-size: 0.7rem; margin-left: 4px;"></span>
+                </th>
+                <th onclick="sortHistory('totalLedger')" class="num-col" style="cursor: pointer; user-select: none; white-space: nowrap;">
+                  Total Ledger Receipts <span id="sort-icon-totalLedger" style="font-size: 0.7rem; margin-left: 4px;"></span>
+                </th>
+                <th onclick="sortHistory('totalBank')" class="num-col" style="cursor: pointer; user-select: none; white-space: nowrap;">
+                  Total Bank Deposits <span id="sort-icon-totalBank" style="font-size: 0.7rem; margin-left: 4px;"></span>
+                </th>
+                <th onclick="sortHistory('netDiscrepancy')" class="num-col" style="cursor: pointer; user-select: none; white-space: nowrap;">
+                  Net Discrepancy <span id="sort-icon-netDiscrepancy" style="font-size: 0.7rem; margin-left: 4px;"></span>
+                </th>
+                <th onclick="sortHistory('status')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+                  Status <span id="sort-icon-status" style="font-size: 0.7rem; margin-left: 4px;"></span>
+                </th>
+                <th onclick="sortHistory('timestamp')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+                  Saved Time <span id="sort-icon-timestamp" style="font-size: 0.7rem; margin-left: 4px;"></span>
+                </th>
                 <th class="actions-col">Actions</th>
               </tr>
             </thead>
