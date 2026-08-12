@@ -1334,6 +1334,7 @@ function loadDataFromServer() {
       history = data || [];
       renderHistoryTable();
       updateChart();
+      populateHistoryDropdown();
     })
     .catch(err => {
       console.error(err);
