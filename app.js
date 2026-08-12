@@ -2344,7 +2344,7 @@ window.loadLiveStatusBoard = function() {
         const uniqueHistoryDates = Array.from(new Set(companyHistory.map(r => r.bankDate).filter(Boolean)));
         uniqueHistoryDates.sort((a, b) => new Date(b) - new Date(a));
 
-        let dropdownOptions = '<option value="">-- All Runs --</option>';
+        let dropdownOptions = '<option value="">-- All History --</option>';
         uniqueHistoryDates.forEach(dateStr => {
           dropdownOptions += `<option value="${dateStr}">${dateStr}</option>`;
         });
@@ -2361,7 +2361,7 @@ window.loadLiveStatusBoard = function() {
             <input type="date" class="live-to-input" value="${activeFilters.to}" style="padding: 1px 4px; font-size: 0.7rem; width: 105px; height: 20px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
           </div>
           <div style="display: flex; align-items: center; gap: 4px; margin-left: auto;">
-            <label style="font-size: 0.7rem; color: var(--text-secondary);">Run</label>
+            <label style="font-size: 0.7rem; color: var(--text-secondary);">History</label>
             <select class="live-run-select" style="padding: 1px 4px; font-size: 0.7rem; width: 110px; height: 20px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
               ${dropdownOptions}
             </select>

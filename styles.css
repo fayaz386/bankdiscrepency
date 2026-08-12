@@ -963,6 +963,11 @@ body.light-theme .recon-table tbody tr:hover {
   border-color: var(--accent-blue);
 }
 
+.filter-select option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
 .actions-col {
   width: 120px;
   text-align: center;
