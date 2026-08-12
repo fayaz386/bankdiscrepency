@@ -1606,8 +1606,20 @@ function renderHistoryTable() {
     let valB = b[historySortColumn];
 
     if (historySortColumn === 'status') {
-      valA = Math.abs(a.netDiscrepancy) <= 0.005 ? 'balanced' : 'discrepant';
-      valB = Math.abs(b.netDiscrepancy) <= 0.005 ? 'balanced' : 'discrepant';
+      const getStatusLabel = (item) => {
+        if (activeTab === 'amex') {
+          const calcFee = item.totalLedger - item.totalBank;
+          const calcPercent = item.totalLedger > 0.005 ? ((calcFee / item.totalLedger) * 100) : 0;
+          const expectedFee = item.totalLedger * (amexFeeRateSetting / 100);
+          if (calcPercent > amexThresholdRateSetting) return 'z-exceeded';
+          if (calcFee > expectedFee + 0.005) return 'y-warning';
+          return 'x-balanced';
+        } else {
+          return Math.abs(item.netDiscrepancy) <= 0.005 ? 'balanced' : 'discrepant';
+        }
+      };
+      valA = getStatusLabel(a);
+      valB = getStatusLabel(b);
     }
 
     if (valA === undefined || valA === null) valA = '';
@@ -1619,6 +1631,69 @@ function renderHistoryTable() {
       return historySortAscending ? valA - valB : valB - valA;
     }
   });
+
+  // Rebuild the history table head dynamically based on Tab type
+  const historyTheadEl = document.getElementById('history-thead');
+  if (historyTheadEl) {
+    if (activeTab === 'amex') {
+      historyTheadEl.innerHTML = `
+        <tr>
+          <th onclick="sortHistory('tbDateLabel')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            TB Range / Date <span id="sort-icon-tbDateLabel" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th onclick="sortHistory('bankDate')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Bank Date <span id="sort-icon-bankDate" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th onclick="sortHistory('totalLedger')" class="num-col" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Total Ledger Receipts <span id="sort-icon-totalLedger" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th onclick="sortHistory('totalBank')" class="num-col" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Total Bank Deposits <span id="sort-icon-totalBank" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th onclick="sortHistory('netDiscrepancy')" class="num-col" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Fee (%) <span id="sort-icon-netDiscrepancy" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th class="num-col" style="user-select: none; white-space: nowrap;">
+            Fee2 (${amexFeeRateSetting}%)
+          </th>
+          <th onclick="sortHistory('status')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Status <span id="sort-icon-status" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th onclick="sortHistory('timestamp')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Saved Time <span id="sort-icon-timestamp" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th class="actions-col">Actions</th>
+        </tr>
+      `;
+    } else {
+      historyTheadEl.innerHTML = `
+        <tr>
+          <th onclick="sortHistory('tbDateLabel')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            TB Range / Date <span id="sort-icon-tbDateLabel" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th onclick="sortHistory('bankDate')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Bank Date <span id="sort-icon-bankDate" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th onclick="sortHistory('totalLedger')" class="num-col" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Total Ledger Receipts <span id="sort-icon-totalLedger" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th onclick="sortHistory('totalBank')" class="num-col" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Total Bank Deposits <span id="sort-icon-totalBank" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th onclick="sortHistory('netDiscrepancy')" class="num-col" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Net Discrepancy <span id="sort-icon-netDiscrepancy" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th onclick="sortHistory('status')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Status <span id="sort-icon-status" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th onclick="sortHistory('timestamp')" style="cursor: pointer; user-select: none; white-space: nowrap;">
+            Saved Time <span id="sort-icon-timestamp" style="font-size: 0.7rem; margin-left: 4px;"></span>
+          </th>
+          <th class="actions-col">Actions</th>
+        </tr>
+      `;
+    }
+  }
 
   // Update sort icons in DOM
   const columnsList = ['tbDateLabel', 'bankDate', 'totalLedger', 'totalBank', 'netDiscrepancy', 'status', 'timestamp'];
@@ -1646,31 +1721,64 @@ function renderHistoryTable() {
 
   sorted.forEach(r => {
     const row = document.createElement('tr');
-    const diffClass = r.netDiscrepancy > 0.005 ? 'val-positive' : (r.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
-    const statusText = Math.abs(r.netDiscrepancy) <= 0.005 
-      ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>' 
-      : '<span class="status-pill status-discrepant"><i data-lucide="alert-triangle"></i> Discrepant</span>';
-
     const timeStr = r.timestamp 
       ? new Date(r.timestamp).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' }) 
       : 'N/A';
 
-    row.innerHTML = `
-      <td><strong>${computeReportDateLabel(r)}</strong></td>
-      <td>${r.bankDate}</td>
-      <td class="num-col">${formatCurrency(r.totalLedger)}</td>
-      <td class="num-col">${formatCurrency(r.totalBank)}</td>
-      <td class="num-col ${diffClass}">${r.netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(r.netDiscrepancy)}</td>
-      <td>${statusText}</td>
-      <td style="font-size: 0.75rem; color: var(--text-secondary);">${timeStr}</td>
-      <td class="actions-col">
-        <div class="action-icon-buttons">
-          <button class="btn-table-action" onclick="editReportRecord('${r.id}')" title="Edit / Load"><i data-lucide="edit"></i></button>
-          <button class="btn-table-action" onclick="exportReportToPDF('${r.id}')" title="Download PDF"><i data-lucide="file-down"></i></button>
-          <button class="btn-table-action delete admin-only" onclick="deleteReportRecord('${r.id}')" title="Delete"><i data-lucide="trash-2"></i></button>
-        </div>
-      </td>
-    `;
+    if (activeTab === 'amex') {
+      const calcFee = r.totalLedger - r.totalBank;
+      const calcPercent = r.totalLedger > 0.005 ? ((calcFee / r.totalLedger) * 100) : 0;
+      const expectedFee = r.totalLedger * (amexFeeRateSetting / 100);
+
+      let statusText = '';
+      if (calcPercent > amexThresholdRateSetting) {
+        statusText = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25);"><i data-lucide="alert-circle"></i> Fee Exceeds Max</span>';
+      } else if (calcFee > expectedFee + 0.005) {
+        statusText = '<span class="status-pill status-discrepant" style="background-color: rgba(245,158,11,0.1); color: var(--accent-yellow); border-color: rgba(245,158,11,0.25);"><i data-lucide="alert-triangle"></i> Fee Warning</span>';
+      } else {
+        statusText = '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>';
+      }
+
+      row.innerHTML = `
+        <td><strong>${computeReportDateLabel(r)}</strong></td>
+        <td>${r.bankDate}</td>
+        <td class="num-col">${formatCurrency(r.totalLedger)}</td>
+        <td class="num-col">${formatCurrency(r.totalBank)}</td>
+        <td class="num-col val-neutral">${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)</td>
+        <td class="num-col val-neutral">${formatCurrency(expectedFee)}</td>
+        <td>${statusText}</td>
+        <td style="font-size: 0.75rem; color: var(--text-secondary);">${timeStr}</td>
+        <td class="actions-col">
+          <div class="action-icon-buttons">
+            <button class="btn-table-action" onclick="editReportRecord('${r.id}')" title="Edit / Load"><i data-lucide="edit"></i></button>
+            <button class="btn-table-action" onclick="exportReportToPDF('${r.id}')" title="Download PDF"><i data-lucide="file-down"></i></button>
+            <button class="btn-table-action delete admin-only" onclick="deleteReportRecord('${r.id}')" title="Delete"><i data-lucide="trash-2"></i></button>
+          </div>
+        </td>
+      `;
+    } else {
+      const diffClass = r.netDiscrepancy > 0.005 ? 'val-positive' : (r.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
+      const statusText = Math.abs(r.netDiscrepancy) <= 0.005 
+        ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>' 
+        : '<span class="status-pill status-discrepant"><i data-lucide="alert-triangle"></i> Discrepant</span>';
+
+      row.innerHTML = `
+        <td><strong>${computeReportDateLabel(r)}</strong></td>
+        <td>${r.bankDate}</td>
+        <td class="num-col">${formatCurrency(r.totalLedger)}</td>
+        <td class="num-col">${formatCurrency(r.totalBank)}</td>
+        <td class="num-col ${diffClass}">${r.netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(r.netDiscrepancy)}</td>
+        <td>${statusText}</td>
+        <td style="font-size: 0.75rem; color: var(--text-secondary);">${timeStr}</td>
+        <td class="actions-col">
+          <div class="action-icon-buttons">
+            <button class="btn-table-action" onclick="editReportRecord('${r.id}')" title="Edit / Load"><i data-lucide="edit"></i></button>
+            <button class="btn-table-action" onclick="exportReportToPDF('${r.id}')" title="Download PDF"><i data-lucide="file-down"></i></button>
+            <button class="btn-table-action delete admin-only" onclick="deleteReportRecord('${r.id}')" title="Delete"><i data-lucide="trash-2"></i></button>
+          </div>
+        </td>
+      `;
+    }
     
     if (currentUser && currentUser.role !== 'admin') {
       const delBtn = row.querySelector('.btn-table-action.delete');
