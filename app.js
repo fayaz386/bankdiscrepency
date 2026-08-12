@@ -2497,13 +2497,14 @@ window.loadLiveStatusBoard = function() {
             const sortedUniqueTbDates = sortedTbDates.filter(Boolean);
             let tbPeriodRange = 'No Dates';
             if (sortedUniqueTbDates.length === 1) {
-              const options = { month: 'short', day: 'numeric' };
+              const options = { month: 'short', day: 'numeric', year: 'numeric' };
               tbPeriodRange = new Date(sortedUniqueTbDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
             } else if (sortedUniqueTbDates.length > 1) {
               const options = { month: 'short', day: 'numeric' };
               const startFmtStr = new Date(sortedUniqueTbDates[0] + 'T00:00:00').toLocaleDateString('en-US', options);
               const endFmtStr = new Date(sortedUniqueTbDates[sortedUniqueTbDates.length - 1] + 'T00:00:00').toLocaleDateString('en-US', options);
-              tbPeriodRange = `${startFmtStr} - ${endFmtStr}`;
+              const yearStr = new Date(sortedUniqueTbDates[sortedUniqueTbDates.length - 1] + 'T00:00:00').getFullYear();
+              tbPeriodRange = `${startFmtStr} - ${endFmtStr}, ${yearStr}`;
             }
 
             dateStr = new Date(matches[matches.length - 1].timestamp).toLocaleDateString();
