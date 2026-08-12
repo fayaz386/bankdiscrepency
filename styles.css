@@ -957,6 +957,7 @@ body.light-theme .recon-table tbody tr:hover {
   cursor: pointer;
   font-family: var(--font-ui);
   transition: var(--transition-fast);
+  color-scheme: dark;
 }
 
 .filter-select:focus {

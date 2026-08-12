@@ -2343,10 +2343,9 @@ window.loadLiveStatusBoard = function() {
         const companyHistory = rawList.filter(r => r.companyId === company.id);
         const uniqueHistoryDates = Array.from(new Set(companyHistory.map(r => r.bankDate).filter(Boolean)));
         uniqueHistoryDates.sort((a, b) => new Date(b) - new Date(a));
-
-        let dropdownOptions = '<option value="">-- All History --</option>';
+        let dropdownOptions = '<option value="" style="background-color: #0f172a !important; color: #f8fafc !important;">-- All History --</option>';
         uniqueHistoryDates.forEach(dateStr => {
-          dropdownOptions += `<option value="${dateStr}">${dateStr}</option>`;
+          dropdownOptions += `<option value="${dateStr}" style="background-color: #0f172a !important; color: #f8fafc !important;">${dateStr}</option>`;
         });
 
         const activeFilters = companyFilters[company.id];
@@ -2362,7 +2361,7 @@ window.loadLiveStatusBoard = function() {
           </div>
           <div style="display: flex; align-items: center; gap: 4px; margin-left: auto;">
             <label style="font-size: 0.7rem; color: var(--text-secondary);">History</label>
-            <select class="live-run-select" style="padding: 1px 4px; font-size: 0.7rem; width: 110px; height: 20px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+            <select class="live-run-select" style="padding: 1px 4px; font-size: 0.7rem; width: 110px; height: 20px; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); color-scheme: dark;">
               ${dropdownOptions}
             </select>
           </div>
