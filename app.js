@@ -54,6 +54,8 @@ const companyFilters = {
   ws_hospitality: { from: '', to: '', selectedRun: '' },
   ws_hotels: { from: '', to: '', selectedRun: '' }
 };
+let amexFeeRateSetting = parseFloat(localStorage.getItem('amexFeeRate') || '3.5');
+let amexThresholdRateSetting = parseFloat(localStorage.getItem('amexThresholdRate') || '12.0');
 
 // Separate Grid States
 let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa_0: '', mc_0: ''... } }]
@@ -165,6 +167,34 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSettingsToggle.addEventListener('click', toggleSettingsView);
   btnCloseSettings.addEventListener('click', () => toggleSettingsView(false));
   addUserForm.addEventListener('submit', handleCreateUser);
+
+  // Initialize and Bind AMEX Rules Config Settings
+  const settingAmexFeeRateInput = document.getElementById('setting-amex-fee-rate');
+  const settingAmexThresholdRateInput = document.getElementById('setting-amex-threshold-rate');
+  if (settingAmexFeeRateInput) {
+    settingAmexFeeRateInput.value = amexFeeRateSetting;
+  }
+  if (settingAmexThresholdRateInput) {
+    settingAmexThresholdRateInput.value = amexThresholdRateSetting;
+  }
+
+  const btnSaveRules = document.getElementById('btn-save-rules');
+  if (btnSaveRules) {
+    btnSaveRules.addEventListener('click', () => {
+      const feeRateVal = parseFloat(settingAmexFeeRateInput.value);
+      const thresholdVal = parseFloat(settingAmexThresholdRateInput.value);
+      if (isNaN(feeRateVal) || feeRateVal < 0 || isNaN(thresholdVal) || thresholdVal < 0) {
+        showToast('Please enter valid non-negative numbers for fee rules.', 'error');
+        return;
+      }
+      amexFeeRateSetting = feeRateVal;
+      amexThresholdRateSetting = thresholdVal;
+      localStorage.setItem('amexFeeRate', feeRateVal.toString());
+      localStorage.setItem('amexThresholdRate', thresholdVal.toString());
+      showToast('Reconciliation & AMEX fee rules saved successfully!', 'success');
+      calculateReconciliation(); // Recalculate summary details instantly
+    });
+  }
   
   const themeToggle = document.getElementById('theme-toggle');
   themeToggle.addEventListener('click', toggleTheme);
@@ -1104,9 +1134,30 @@ function calculateReconciliation() {
   }
 
   // Dynamically update headers/labels based on Tab
-  const diffHeader = document.getElementById('recon-diff-header');
-  if (diffHeader) {
-    diffHeader.textContent = activeTab === 'amex' ? 'Fee' : 'Discrepancy';
+  const theadEl = document.getElementById('recon-thead');
+  if (theadEl) {
+    if (activeTab === 'amex') {
+      theadEl.innerHTML = `
+        <tr>
+          <th>Category</th>
+          <th class="num-col">Ledger Total (CB)</th>
+          <th class="num-col">Bank Statement</th>
+          <th class="num-col">Fee (%)</th>
+          <th class="num-col">Fee2 (${amexFeeRateSetting}%)</th>
+          <th>Status</th>
+        </tr>
+      `;
+    } else {
+      theadEl.innerHTML = `
+        <tr>
+          <th>Category</th>
+          <th class="num-col">Ledger Total (CB)</th>
+          <th class="num-col">Bank Statement</th>
+          <th class="num-col" id="recon-diff-header">Discrepancy</th>
+          <th>Status</th>
+        </tr>
+      `;
+    }
   }
 
   const discrepancyLabelText = document.getElementById('discrepancy-label-text');
@@ -1119,34 +1170,49 @@ function calculateReconciliation() {
   result.rows.forEach(r => {
     const row = document.createElement('tr');
     
-    // For AMEX: Fee = TB total minus Bank statement (positive)
-    const diffVal = activeTab === 'amex' ? (r.ledger - r.bank) : r.diff;
-    let diffClass = 'val-neutral';
     if (activeTab === 'amex') {
-      diffClass = diffVal > 0.005 ? 'val-positive' : (diffVal < -0.005 ? 'val-negative' : 'val-neutral');
+      // AMEX layout: Category | Ledger | Bank | Fee (%) | Fee2 | Status
+      const calcFee = r.ledger - r.bank;
+      const calcPercent = r.ledger > 0.005 ? ((calcFee / r.ledger) * 100) : 0;
+      const expectedFee = r.ledger * (amexFeeRateSetting / 100);
+      
+      let statusText = '';
+      if (!isAllZero) {
+        if (calcPercent > amexThresholdRateSetting) {
+          statusText = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25);"><i data-lucide="alert-circle"></i> Fee Exceeds Max</span>';
+        } else if (calcFee > expectedFee + 0.005) {
+          statusText = '<span class="status-pill status-discrepant" style="background-color: rgba(245,158,11,0.1); color: var(--accent-yellow); border-color: rgba(245,158,11,0.25);"><i data-lucide="alert-triangle"></i> Fee Warning</span>';
+        } else {
+          statusText = '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>';
+        }
+      }
+      
+      row.innerHTML = `
+        <td><strong>${r.name}</strong></td>
+        <td class="num-col">${formatCurrency(r.ledger)}</td>
+        <td class="num-col">${formatCurrency(r.bank)}</td>
+        <td class="num-col val-neutral">${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)</td>
+        <td class="num-col val-neutral">${formatCurrency(expectedFee)}</td>
+        <td>${statusText}</td>
+      `;
     } else {
-      diffClass = r.diff > 0.005 ? 'val-positive' : (r.diff < -0.005 ? 'val-negative' : 'val-neutral');
-    }
-    
-    // Do not show Reconciled status if everything is zero (no entry has been made)
-    let statusText = '';
-    if (!isAllZero) {
-      if (activeTab === 'amex') {
-        statusText = '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>';
-      } else {
+      // Cards layout: standard columns
+      const diffClass = r.diff > 0.005 ? 'val-positive' : (r.diff < -0.005 ? 'val-negative' : 'val-neutral');
+      let statusText = '';
+      if (!isAllZero) {
         statusText = Math.abs(r.diff) <= 0.005 
           ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>' 
           : '<span class="status-pill status-discrepant"><i data-lucide="alert-triangle"></i> Discrepant</span>';
       }
-    }
 
-    row.innerHTML = `
-      <td><strong>${r.name}</strong></td>
-      <td class="num-col">${formatCurrency(r.ledger)}</td>
-      <td class="num-col">${formatCurrency(r.bank)}</td>
-      <td class="num-col ${diffClass}">${(activeTab !== 'amex' && r.diff > 0.005) ? '+' : ''}${formatCurrency(diffVal)}</td>
-      <td>${statusText}</td>
-    `;
+      row.innerHTML = `
+        <td><strong>${r.name}</strong></td>
+        <td class="num-col">${formatCurrency(r.ledger)}</td>
+        <td class="num-col">${formatCurrency(r.bank)}</td>
+        <td class="num-col ${diffClass}">${r.diff > 0.005 ? '+' : ''}${formatCurrency(r.diff)}</td>
+        <td>${statusText}</td>
+      `;
+    }
     reconTbody.appendChild(row);
   });
 
@@ -1155,52 +1221,99 @@ function calculateReconciliation() {
   totalRow.style.fontWeight = 'bold';
   totalRow.style.borderTop = '2px solid var(--border-color)';
   
-  const netVal = activeTab === 'amex' ? (result.totalLedger - result.totalBank) : result.netDiscrepancy;
-  let netClass = 'val-neutral';
   if (activeTab === 'amex') {
-    netClass = netVal > 0.005 ? 'val-positive' : (netVal < -0.005 ? 'val-negative' : 'val-neutral');
-  } else {
-    netClass = result.netDiscrepancy > 0.005 ? 'val-positive' : (result.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
-  }
-  
-  // Do not show Reconciled/Balanced status if everything is zero (no entry has been made)
-  let netStatus = '';
-  if (!isAllZero) {
-    if (activeTab === 'amex') {
-      netStatus = '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Balanced</span>';
+    const totalCalcFee = result.totalLedger - result.totalBank;
+    const totalCalcPercent = result.totalLedger > 0.005 ? ((totalCalcFee / result.totalLedger) * 100) : 0;
+    const totalExpectedFee = result.totalLedger * (amexFeeRateSetting / 100);
+    
+    let netStatus = '';
+    if (!isAllZero) {
+      if (totalCalcPercent > amexThresholdRateSetting) {
+        netStatus = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25);"><i data-lucide="alert-circle"></i> Out of Limit</span>';
+      } else if (totalCalcFee > totalExpectedFee + 0.005) {
+        netStatus = '<span class="status-pill status-discrepant" style="background-color: rgba(245,158,11,0.1); color: var(--accent-yellow); border-color: rgba(245,158,11,0.25);"><i data-lucide="alert-triangle"></i> Fee Warning</span>';
+      } else {
+        netStatus = '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Balanced</span>';
+      }
+    }
+
+    totalRow.innerHTML = `
+      <td>TOTALS</td>
+      <td class="num-col">${formatCurrency(result.totalLedger)}</td>
+      <td class="num-col">${formatCurrency(result.totalBank)}</td>
+      <td class="num-col val-neutral">${formatCurrency(totalCalcFee)} (${totalCalcPercent.toFixed(2)}%)</td>
+      <td class="num-col val-neutral">${formatCurrency(totalExpectedFee)}</td>
+      <td>${netStatus}</td>
+    `;
+    reconTbody.appendChild(totalRow);
+
+    // Update Summary displays
+    totalLedgerDisplay.textContent = formatCurrency(result.totalLedger);
+    totalBankDisplay.textContent = formatCurrency(result.totalBank);
+    netDiscrepancyDisplay.textContent = formatCurrency(totalCalcFee);
+
+    const discCard = document.getElementById('card-discrepancy');
+    const isWarning = totalCalcFee > totalExpectedFee + 0.005;
+    const isExceeded = totalCalcPercent > amexThresholdRateSetting;
+
+    if (isAllZero) {
+      netDiscrepancyDisplay.className = 'val-neutral';
+      discrepancyIcon.setAttribute('data-lucide', 'check-circle-2');
+      discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-green)');
+      discCard.style.boxShadow = 'none';
+    } else if (isExceeded) {
+      netDiscrepancyDisplay.className = 'val-negative';
+      discrepancyIcon.setAttribute('data-lucide', 'alert-circle');
+      discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-red)');
+      discCard.style.boxShadow = '0 0 20px rgba(239, 68, 68, 0.15)';
+    } else if (isWarning) {
+      netDiscrepancyDisplay.className = 'val-neutral';
+      discrepancyIcon.setAttribute('data-lucide', 'alert-triangle');
+      discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-yellow)');
+      discCard.style.boxShadow = '0 0 20px rgba(245, 158, 11, 0.15)';
     } else {
+      netDiscrepancyDisplay.className = 'val-neutral';
+      discrepancyIcon.setAttribute('data-lucide', 'check-circle-2');
+      discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-green)');
+      discCard.style.boxShadow = 'none';
+    }
+  } else {
+    // Standard cards layout
+    const netClass = result.netDiscrepancy > 0.005 ? 'val-positive' : (result.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
+    let netStatus = '';
+    if (!isAllZero) {
       netStatus = Math.abs(result.netDiscrepancy) <= 0.005 
         ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Balanced</span>' 
         : '<span class="status-pill status-discrepant"><i data-lucide="alert-circle"></i> Out of Balance</span>';
     }
-  }
 
-  totalRow.innerHTML = `
-    <td>TOTALS</td>
-    <td class="num-col">${formatCurrency(result.totalLedger)}</td>
-    <td class="num-col">${formatCurrency(result.totalBank)}</td>
-    <td class="num-col ${netClass}">${formatCurrency(netVal)}</td>
-    <td>${netStatus}</td>
-  `;
-  reconTbody.appendChild(totalRow);
+    totalRow.innerHTML = `
+      <td>TOTALS</td>
+      <td class="num-col">${formatCurrency(result.totalLedger)}</td>
+      <td class="num-col">${formatCurrency(result.totalBank)}</td>
+      <td class="num-col ${netClass}">${formatCurrency(result.netDiscrepancy)}</td>
+      <td>${netStatus}</td>
+    `;
+    reconTbody.appendChild(totalRow);
 
-  // Update Summary displays
-  totalLedgerDisplay.textContent = formatCurrency(result.totalLedger);
-  totalBankDisplay.textContent = formatCurrency(result.totalBank);
-  netDiscrepancyDisplay.textContent = formatCurrency(netVal);
+    // Update Summary displays
+    totalLedgerDisplay.textContent = formatCurrency(result.totalLedger);
+    totalBankDisplay.textContent = formatCurrency(result.totalBank);
+    netDiscrepancyDisplay.textContent = formatCurrency(result.netDiscrepancy);
 
-  const discCard = document.getElementById('card-discrepancy');
-  if (activeTab === 'amex' || Math.abs(result.netDiscrepancy) <= 0.005) {
-    netDiscrepancyDisplay.className = 'val-neutral';
-    discrepancyIcon.setAttribute('data-lucide', 'check-circle-2');
-    discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-green)');
-    discCard.style.boxShadow = 'none';
-  } else {
-    netDiscrepancyDisplay.className = result.netDiscrepancy > 0 ? 'val-positive' : 'val-negative';
-    discrepancyIcon.setAttribute('data-lucide', 'alert-circle');
-    discrepancyIconContainer.style.setProperty('--icon-color', result.netDiscrepancy > 0 ? 'var(--accent-green)' : 'var(--accent-red)');
-    const pulseColor = result.netDiscrepancy > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
-    discCard.style.boxShadow = `0 0 20px ${pulseColor}`;
+    const discCard = document.getElementById('card-discrepancy');
+    if (Math.abs(result.netDiscrepancy) <= 0.005) {
+      netDiscrepancyDisplay.className = 'val-neutral';
+      discrepancyIcon.setAttribute('data-lucide', 'check-circle-2');
+      discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-green)');
+      discCard.style.boxShadow = 'none';
+    } else {
+      netDiscrepancyDisplay.className = result.netDiscrepancy > 0 ? 'val-positive' : 'val-negative';
+      discrepancyIcon.setAttribute('data-lucide', 'alert-circle');
+      discrepancyIconContainer.style.setProperty('--icon-color', result.netDiscrepancy > 0 ? 'var(--accent-green)' : 'var(--accent-red)');
+      const pulseColor = result.netDiscrepancy > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+      discCard.style.boxShadow = `0 0 20px ${pulseColor}`;
+    }
   }
 
   lucide.createIcons();
