@@ -2224,8 +2224,8 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
         data.cell.styles.fillColor = [241, 245, 249];
         
         if (isCards && data.column.index === 3) {
-          if (result.netDiscrepancy > 0.005) data.cell.styles.textColor = [16, 185, 129];
-          if (result.netDiscrepancy < -0.005) data.cell.styles.textColor = [239, 68, 68];
+          if (result.netDiscrepancy < -0.005) data.cell.styles.textColor = [16, 185, 129];
+          if (result.netDiscrepancy > 0.005) data.cell.styles.textColor = [239, 68, 68];
         } else if (!isCards && data.column.index === 3) {
           const totalCalcFee = result.totalLedger - result.totalBank;
           const totalCalcPercent = result.totalLedger > 0.005 ? ((totalCalcFee / result.totalLedger) * 100) : 0;
@@ -2608,8 +2608,8 @@ function exportReportToPDF(id) {
         data.cell.styles.fillColor = [241, 245, 249];
         
         if (isCards && data.column.index === 3) {
-          if (report.netDiscrepancy > 0.005) data.cell.styles.textColor = [16, 185, 129];
-          if (report.netDiscrepancy < -0.005) data.cell.styles.textColor = [239, 68, 68];
+          if (report.netDiscrepancy < -0.005) data.cell.styles.textColor = [16, 185, 129];
+          if (report.netDiscrepancy > 0.005) data.cell.styles.textColor = [239, 68, 68];
         } else if (!isCards && data.column.index === 3) {
           const totalCalcFee = report.totalLedger - report.totalBank;
           const totalCalcPercent = report.totalLedger > 0.005 ? ((totalCalcFee / report.totalLedger) * 100) : 0;
@@ -3257,8 +3257,11 @@ window.loadLiveStatusBoard = function() {
               ? '<span class="status-pill status-reconciled" style="padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="check" style="width: 8px; height: 8px;"></i> Balanced</span>'
               : '<span class="status-pill status-discrepant" style="padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="alert-triangle" style="width: 8px; height: 8px;"></i> Out of Balance</span>';
             
+            const absNetDiff = Math.abs(netDiscrepancy);
             const diffClass = netDiscrepancy < -0.005 ? 'val-positive' : (netDiscrepancy > 0.005 ? 'val-negative' : 'val-neutral');
-            const subNote = netDiscrepancy < -0.005 ? ' (BANK EXTRA)' : (netDiscrepancy > 0.005 ? ' (BANK SHORT)' : '');
+            const subNote = netDiscrepancy < -0.005 
+              ? ' <span style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); text-transform: uppercase;">(BANK EXTRA)</span>' 
+              : (netDiscrepancy > 0.005 ? ' <span style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); text-transform: uppercase;">(BANK SHORT)</span>' : '');
             
             // Format Bank Date range in the same style as TB Period (adding the year on the end)
             const earliestBank = matches[0].bankDate;
@@ -3322,7 +3325,7 @@ window.loadLiveStatusBoard = function() {
                 <div><span>Ledger Total:</span> <span>${formatCurrency(totalLedger)}</span></div>
                 <div><span>Bank Total:</span> <span>${formatCurrency(totalBank)}</span></div>
                 <div style="font-weight: bold; border-top: 1px dashed var(--border-color); padding-top: 2px; margin-top: 2px;">
-                  <span>Discrepancy:</span> <span class="${diffClass}">${netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(netDiscrepancy)}</span>
+                  <span>Discrepancy:</span> <span class="${diffClass}">${formatCurrency(absNetDiff)}</span>${subNote}
                 </div>
               </div>
             `;
