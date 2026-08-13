@@ -1275,8 +1275,7 @@ function calculateReconciliation() {
 
   // Render Summary Bottom Row
   const totalRow = document.createElement('tr');
-  totalRow.style.fontWeight = 'bold';
-  totalRow.style.borderTop = '2px solid var(--border-color)';
+  totalRow.className = 'totals-row-highlight';
   
   if (activeTab === 'amex') {
     const totalCalcFee = result.totalLedger - result.totalBank;

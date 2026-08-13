@@ -1700,3 +1700,18 @@ body.light-theme .status-board-card {
   border-top: 1px dotted var(--border-color);
   padding-top: 6px;
 }
+
+/* Totals Row Highlights in Live summary tables */
+.totals-row-highlight td {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-top: 2px solid rgba(255, 255, 255, 0.15) !important;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.15) !important;
+  font-weight: 700 !important;
+  font-size: 0.9rem !important;
+}
+
+body.light-theme .totals-row-highlight td {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+  border-top: 2px solid rgba(0, 0, 0, 0.1) !important;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.1) !important;
+}
