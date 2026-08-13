@@ -3258,7 +3258,7 @@ window.loadLiveStatusBoard = function() {
             let statusBadge = '';
 
             if (isAmex) {
-              labelTitle = 'Fee:';
+              labelTitle = 'Discrepancy:';
               const calcFee = totalLedger - totalBank;
               const calcPercent = totalLedger > 0.005 ? ((calcFee / totalLedger) * 100) : 0;
               const expectedFee = totalLedger * (amexFeeRateSetting / 100);
@@ -3270,25 +3270,25 @@ window.loadLiveStatusBoard = function() {
               if (isExceeded) {
                 statusBadge = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25); padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="alert-circle" style="width: 8px; height: 8px;"></i> Out of Limit</span>';
                 discrepancyRightHtml = `
-                  <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 1.35rem; font-weight: 800;" class="val-negative">
-                    <span style="font-size: 1.05rem; font-weight: 800; text-transform: uppercase;">(EXCEEDS MAX)</span>
-                    <span>${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)</span>
+                  <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 0.72rem; font-weight: 700; color: var(--accent-red); text-transform: uppercase;">(EXCEEDS MAX: ${formatCurrency(calcFee)} / ${calcPercent.toFixed(2)}%)</span>
+                    <span style="font-size: 1.35rem; font-weight: 800;" class="val-negative">${formatCurrency(calcFee)}</span>
                   </div>
                 `;
               } else if (isWarning) {
                 statusBadge = '<span class="status-pill status-discrepant" style="background-color: rgba(245,158,11,0.1); color: var(--accent-yellow); border-color: rgba(245,158,11,0.25); padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="alert-triangle" style="width: 8px; height: 8px;"></i> Fee Warning</span>';
                 discrepancyRightHtml = `
-                  <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 1.35rem; font-weight: 800; color: var(--accent-yellow);">
-                    <span style="font-size: 1.05rem; font-weight: 800; text-transform: uppercase;">(FEE WARNING)</span>
-                    <span>${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)</span>
+                  <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 0.72rem; font-weight: 700; color: var(--accent-yellow); text-transform: uppercase;">(FEE WARNING: ${formatCurrency(calcFee)} / ${calcPercent.toFixed(2)}%)</span>
+                    <span style="font-size: 1.35rem; font-weight: 800; color: var(--accent-yellow);">${formatCurrency(calcFee)}</span>
                   </div>
                 `;
               } else {
                 statusBadge = '<span class="status-pill status-reconciled" style="padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="check" style="width: 8px; height: 8px;"></i> Balanced</span>';
                 discrepancyRightHtml = `
-                  <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 1.35rem; font-weight: 800; color: var(--text-primary);">
-                    <span style="font-size: 1.05rem; font-weight: 800; color: var(--accent-green); text-transform: uppercase;">(FEE OK)</span>
-                    <span>${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)</span>
+                  <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 0.72rem; font-weight: 700; color: var(--accent-green); text-transform: uppercase;">(FEE OK: ${formatCurrency(calcFee)} / ${calcPercent.toFixed(2)}%)</span>
+                    <span style="font-size: 1.35rem; font-weight: 800;" class="val-neutral">${formatCurrency(0)}</span>
                   </div>
                 `;
               }
@@ -3303,16 +3303,16 @@ window.loadLiveStatusBoard = function() {
 
               if (netDiscrepancy < -0.005) {
                 discrepancyRightHtml = `
-                  <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 1.35rem; font-weight: 800;" class="val-positive">
-                    <span style="font-size: 1.05rem; font-weight: 800; text-transform: uppercase;">(BANK EXTRA)</span>
-                    <span>${formatCurrency(absNetDiff)}</span>
+                  <div style="display: inline-flex; align-items: center; gap: 6px;" class="val-positive">
+                    <span style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase;">(BANK EXTRA)</span>
+                    <span style="font-size: 1.35rem; font-weight: 800;">${formatCurrency(absNetDiff)}</span>
                   </div>
                 `;
               } else if (netDiscrepancy > 0.005) {
                 discrepancyRightHtml = `
-                  <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 1.35rem; font-weight: 800;" class="val-negative">
-                    <span style="font-size: 1.05rem; font-weight: 800; text-transform: uppercase;">(BANK SHORT)</span>
-                    <span>${formatCurrency(absNetDiff)}</span>
+                  <div style="display: inline-flex; align-items: center; gap: 6px;" class="val-negative">
+                    <span style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase;">(BANK SHORT)</span>
+                    <span style="font-size: 1.35rem; font-weight: 800;">${formatCurrency(absNetDiff)}</span>
                   </div>
                 `;
               } else {
