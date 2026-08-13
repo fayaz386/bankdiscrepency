@@ -1035,38 +1035,38 @@ function runReconciliationLogic() {
     // Visa
     const visaLedger = result.tbSums['visa'] + result.tbSums['visapos'];
     const visaBank = result.bank['visa'];
-    const visaDiff = visaLedger - visaBank;
+    const visaDiff = visaBank - visaLedger;
     result.rows.push({ name: 'Visa (Sales + POS)', ledger: visaLedger, bank: visaBank, diff: visaDiff });
 
     // MC
     const mcLedger = result.tbSums['mc'] + result.tbSums['mcpos'];
     const mcBank = result.bank['mc'];
-    const mcDiff = mcLedger - mcBank;
+    const mcDiff = mcBank - mcLedger;
     result.rows.push({ name: 'MasterCard (Sales + POS)', ledger: mcLedger, bank: mcBank, diff: mcDiff });
 
     // Discover
     const discLedger = result.tbSums['discover'] + result.tbSums['diner'];
     const discBank = result.bank['discover'];
-    const discDiff = discLedger - discBank;
+    const discDiff = discBank - discLedger;
     result.rows.push({ name: 'Discover (Discover + Diner)', ledger: discLedger, bank: discBank, diff: discDiff });
 
     // Debit 1
     const d1Ledger = result.tbSums['debit1'];
     const d1Bank = result.bank['debit1'];
-    const d1Diff = d1Ledger - d1Bank;
+    const d1Diff = d1Bank - d1Ledger;
     result.rows.push({ name: 'Debit 1', ledger: d1Ledger, bank: d1Bank, diff: d1Diff });
 
     // Debit 2
     const d2Ledger = result.tbSums['debit2'];
     const d2Bank = result.bank['debit2'];
-    const d2Diff = d2Ledger - d2Bank;
+    const d2Diff = d2Bank - d2Ledger;
     result.rows.push({ name: 'Debit 2', ledger: d2Ledger, bank: d2Bank, diff: d2Diff });
 
   } else {
     // AMEX Reconciliation
     const amexLedger = result.tbSums['amex'] + result.tbSums['amexpos'];
     const amexBank = result.bank['amex'];
-    const amexDiff = amexLedger - amexBank;
+    const amexDiff = amexBank - amexLedger;
     result.rows.push({ name: 'American Express (AMEX)', ledger: amexLedger, bank: amexBank, diff: amexDiff });
   }
 
@@ -1075,7 +1075,7 @@ function runReconciliationLogic() {
     result.totalLedger += r.ledger;
     result.totalBank += r.bank;
   });
-  result.netDiscrepancy = result.totalLedger - result.totalBank;
+  result.netDiscrepancy = result.totalBank - result.totalLedger;
 
   return result;
 }
@@ -1300,7 +1300,7 @@ function calculateReconciliation() {
       <td>TOTALS</td>
       <td class="num-col">${formatCurrency(result.totalLedger)}</td>
       <td class="num-col">${formatCurrency(result.totalBank)}</td>
-      <td class="num-col ${netClass}">${formatCurrency(result.netDiscrepancy)}</td>
+      <td class="num-col ${netClass}">${result.netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(result.netDiscrepancy)}</td>
       <td>${netStatus}</td>
     `;
     reconTbody.appendChild(totalRow);
@@ -2989,7 +2989,7 @@ window.loadLiveStatusBoard = function() {
 
             const totalLedger = matches.reduce((sum, r) => sum + (r.totalLedger || 0), 0);
             const totalBank = matches.reduce((sum, r) => sum + (r.totalBank || 0), 0);
-            const netDiscrepancy = totalLedger - totalBank;
+            const netDiscrepancy = totalBank - totalLedger;
 
             const isBalanced = Math.abs(netDiscrepancy) <= 0.005;
             statusBadge = isBalanced 
