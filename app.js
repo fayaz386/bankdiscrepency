@@ -830,19 +830,35 @@ function renderBankInputsList() {
     // Input fields row
     const postings = bankPostings[cat.id] || [];
     postings.forEach((post, index) => {
+      if (post.isRestaurant === undefined) post.isRestaurant = false;
+
       const inputCell = document.createElement('div');
       inputCell.className = 'sheet-value-cell';
+      inputCell.style.display = 'flex';
+      inputCell.style.alignItems = 'center';
+      inputCell.style.gap = '6px';
+      
       inputCell.innerHTML = `
-        <div class="input-prefix">
+        <div class="input-prefix" style="flex: 1;">
           <span>$</span>
-          <input type="text" id="bank-post-${post.id}" placeholder="0.00" value="${post.value}">
+          <input type="text" id="bank-post-${post.id}" placeholder="0.00" value="${post.value}" style="width: 100%;">
         </div>
+        <label class="restaurant-flag-label" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; color: var(--text-secondary); cursor: pointer; user-select: none; margin-bottom: 0; padding: 2px 4px; background: rgba(255,255,255,0.03); border: 1px dashed var(--border-color); border-radius: var(--border-radius-xs);" title="Flag this line as Restaurant">
+          <input type="checkbox" id="bank-post-restaurant-${post.id}" ${post.isRestaurant ? 'checked' : ''} style="margin: 0; cursor: pointer; width: 12px; height: 12px;">
+          <span style="font-weight: bold; color: var(--accent-orange);">R</span>
+        </label>
       `;
       col.appendChild(inputCell);
 
-      const inputField = inputCell.querySelector('input');
+      const inputField = inputCell.querySelector('input[type="text"]');
       inputField.addEventListener('input', (e) => {
         post.value = e.target.value;
+        calculateReconciliation();
+      });
+
+      const checkbox = inputCell.querySelector('input[type="checkbox"]');
+      checkbox.addEventListener('change', (e) => {
+        post.isRestaurant = e.target.checked;
         calculateReconciliation();
       });
     });
@@ -1006,70 +1022,100 @@ function sumCategory(cols, catId, isHotel) {
 function runReconciliationLogic() {
   const result = {
     tbSums: {}, // Combined sum of Hotel + Restaurant category sums
-    bank: {},
+    bank: {}, // Combined sum of bank category sums (for legacy fallback/totals)
+    bankHotel: {},
+    bankRestaurant: {},
     rows: [],
     totalLedger: 0,
     totalBank: 0,
     netDiscrepancy: 0
   };
 
-  // 1. Gather Bank Statement Inputs (summing across postings arrays)
+  // 1. Gather Bank Statement Inputs (split by isRestaurant checkbox flag)
   const activeKeys = activeTab === 'cards' ? ['visa', 'mc', 'discover', 'debit1', 'debit2'] : ['amex'];
   activeKeys.forEach(key => {
-    let sum = 0;
+    let sumHotel = 0;
+    let sumRestaurant = 0;
     const postings = bankPostings[key] || [];
     postings.forEach(p => {
-      sum += parseMathExpression(p.value);
+      const val = parseMathExpression(p.value);
+      if (p.isRestaurant) {
+        sumRestaurant += val;
+      } else {
+        sumHotel += val;
+      }
     });
-    result.bank[key] = sum;
+    result.bankHotel[key] = sumHotel;
+    result.bankRestaurant[key] = sumRestaurant;
+    result.bank[key] = sumHotel + sumRestaurant; // Combined total
   });
 
-  // 2. Sum Trial Balance categories (Combined Hotel + Restaurant category sums)
+  // 2. Sum Trial Balance categories separately for Hotel and Restaurant
   const rows = activeTab === 'cards' ? CARD_ROWS : AMEX_ROWS;
+  const hotelSums = {};
+  const restaurantSums = {};
   rows.forEach(r => {
-    const hotelSum = sumCategory(hotelColumns, r.id, true);
-    const restaurantSum = sumCategory(restaurantColumns, r.id, false);
-    result.tbSums[r.id] = hotelSum + restaurantSum;
+    hotelSums[r.id] = sumCategory(hotelColumns, r.id, true);
+    restaurantSums[r.id] = sumCategory(restaurantColumns, r.id, false);
+    result.tbSums[r.id] = hotelSums[r.id] + restaurantSums[r.id]; // Combined total
   });
 
-  // 3. Map values and calculate discrepancies
+  // 3. Map values and calculate discrepancies (split by Hotel and Restaurant)
   if (activeTab === 'cards') {
     // Visa
-    const visaLedger = result.tbSums['visa'] + result.tbSums['visapos'];
-    const visaBank = result.bank['visa'];
-    const visaDiff = visaBank - visaLedger;
-    result.rows.push({ name: 'Visa (Sales + POS)', ledger: visaLedger, bank: visaBank, diff: visaDiff });
+    const visaLedgerH = hotelSums['visa'] + hotelSums['visapos'];
+    const visaBankH = result.bankHotel['visa'] || 0;
+    result.rows.push({ name: 'Visa - Hotel', ledger: visaLedgerH, bank: visaBankH, diff: visaBankH - visaLedgerH });
+
+    const visaLedgerR = restaurantSums['visa'] + restaurantSums['visapos'];
+    const visaBankR = result.bankRestaurant['visa'] || 0;
+    result.rows.push({ name: 'Visa - Restaurant', ledger: visaLedgerR, bank: visaBankR, diff: visaBankR - visaLedgerR });
 
     // MC
-    const mcLedger = result.tbSums['mc'] + result.tbSums['mcpos'];
-    const mcBank = result.bank['mc'];
-    const mcDiff = mcBank - mcLedger;
-    result.rows.push({ name: 'MasterCard (Sales + POS)', ledger: mcLedger, bank: mcBank, diff: mcDiff });
+    const mcLedgerH = hotelSums['mc'] + hotelSums['mcpos'];
+    const mcBankH = result.bankHotel['mc'] || 0;
+    result.rows.push({ name: 'MasterCard - Hotel', ledger: mcLedgerH, bank: mcBankH, diff: mcBankH - mcLedgerH });
+
+    const mcLedgerR = restaurantSums['mc'] + restaurantSums['mcpos'];
+    const mcBankR = result.bankRestaurant['mc'] || 0;
+    result.rows.push({ name: 'MasterCard - Restaurant', ledger: mcLedgerR, bank: mcBankR, diff: mcBankR - mcLedgerR });
 
     // Discover
-    const discLedger = result.tbSums['discover'] + result.tbSums['diner'];
-    const discBank = result.bank['discover'];
-    const discDiff = discBank - discLedger;
-    result.rows.push({ name: 'Discover (Discover + Diner)', ledger: discLedger, bank: discBank, diff: discDiff });
+    const discLedgerH = hotelSums['discover'] + hotelSums['diner'];
+    const discBankH = result.bankHotel['discover'] || 0;
+    result.rows.push({ name: 'Discover - Hotel', ledger: discLedgerH, bank: discBankH, diff: discBankH - discLedgerH });
+
+    const discLedgerR = restaurantSums['discover'] + restaurantSums['diner'];
+    const discBankR = result.bankRestaurant['discover'] || 0;
+    result.rows.push({ name: 'Discover - Restaurant', ledger: discLedgerR, bank: discBankR, diff: discBankR - discLedgerR });
 
     // Debit 1
-    const d1Ledger = result.tbSums['debit1'];
-    const d1Bank = result.bank['debit1'];
-    const d1Diff = d1Bank - d1Ledger;
-    result.rows.push({ name: 'Debit 1', ledger: d1Ledger, bank: d1Bank, diff: d1Diff });
+    const d1LedgerH = hotelSums['debit1'] || 0;
+    const d1BankH = result.bankHotel['debit1'] || 0;
+    result.rows.push({ name: 'Debit 1 - Hotel', ledger: d1LedgerH, bank: d1BankH, diff: d1BankH - d1LedgerH });
+
+    const d1LedgerR = restaurantSums['debit1'] || 0;
+    const d1BankR = result.bankRestaurant['debit1'] || 0;
+    result.rows.push({ name: 'Debit 1 - Restaurant', ledger: d1LedgerR, bank: d1BankR, diff: d1BankR - d1LedgerR });
 
     // Debit 2
-    const d2Ledger = result.tbSums['debit2'];
-    const d2Bank = result.bank['debit2'];
-    const d2Diff = d2Bank - d2Ledger;
-    result.rows.push({ name: 'Debit 2', ledger: d2Ledger, bank: d2Bank, diff: d2Diff });
+    const d2LedgerH = hotelSums['debit2'] || 0;
+    const d2BankH = result.bankHotel['debit2'] || 0;
+    result.rows.push({ name: 'Debit 2 - Hotel', ledger: d2LedgerH, bank: d2BankH, diff: d2BankH - d2LedgerH });
+
+    const d2LedgerR = restaurantSums['debit2'] || 0;
+    const d2BankR = result.bankRestaurant['debit2'] || 0;
+    result.rows.push({ name: 'Debit 2 - Restaurant', ledger: d2LedgerR, bank: d2BankR, diff: d2BankR - d2LedgerR });
 
   } else {
     // AMEX Reconciliation
-    const amexLedger = result.tbSums['amex'] + result.tbSums['amexpos'];
-    const amexBank = result.bank['amex'];
-    const amexDiff = amexBank - amexLedger;
-    result.rows.push({ name: 'American Express (AMEX)', ledger: amexLedger, bank: amexBank, diff: amexDiff });
+    const amexLedgerH = hotelSums['amex'] + hotelSums['amexpos'];
+    const amexBankH = result.bankHotel['amex'] || 0;
+    result.rows.push({ name: 'American Express - Hotel', ledger: amexLedgerH, bank: amexBankH, diff: amexBankH - amexLedgerH });
+
+    const amexLedgerR = restaurantSums['amex'] + restaurantSums['amexpos'];
+    const amexBankR = result.bankRestaurant['amex'] || 0;
+    result.rows.push({ name: 'American Express - Restaurant', ledger: amexLedgerR, bank: amexBankR, diff: amexBankR - amexLedgerR });
   }
 
   // 4. Calculate Totals
@@ -1310,7 +1356,7 @@ function calculateReconciliation() {
     // Update Summary displays
     totalLedgerDisplay.textContent = formatCurrency(result.totalLedger);
     totalBankDisplay.textContent = formatCurrency(result.totalBank);
-    netDiscrepancyDisplay.textContent = formatCurrency(result.netDiscrepancy);
+    netDiscrepancyDisplay.textContent = (result.netDiscrepancy > 0.005 ? '+' : '') + formatCurrency(result.netDiscrepancy);
 
     const discCard = document.getElementById('card-discrepancy');
     if (Math.abs(result.netDiscrepancy) <= 0.005) {
@@ -2019,7 +2065,7 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
       "TOTALS",
       formatCurrency(result.totalLedger),
       formatCurrency(result.totalBank),
-      formatCurrency(result.netDiscrepancy),
+      (result.netDiscrepancy > 0.005 ? '+' : '') + formatCurrency(result.netDiscrepancy),
       Math.abs(result.netDiscrepancy) <= 0.005 ? "Balanced" : "Out of Balance"
     ]);
   } else {
@@ -2226,8 +2272,12 @@ function exportReportToPDF(id) {
 
   const breakdownRows = [];
   
-  // Calculate category sums on the fly from saved report data
-  const tbSums = {};
+  // Calculate category sums on the fly from saved report data split by Hotel and Restaurant
+  const hotelSums = {};
+  const restaurantSums = {};
+  const bankHotel = {};
+  const bankRestaurant = {};
+  
   const rows = isCards ? CARD_ROWS : AMEX_ROWS;
   rows.forEach(r => {
     let hotelSum = 0;
@@ -2236,78 +2286,149 @@ function exportReportToPDF(id) {
     const savedHotelCats = report.hotelCategories || getInitialCategories();
     const savedRestaurantCats = report.restaurantCategories || report.hotelCategories || getInitialCategories();
     
-    const hotelCat = savedHotelCats[report.reconType][r.id];
+    const hotelCat = savedHotelCats[report.reconType]?.[r.id];
     if (hotelCat && report.hotelColumns) {
       report.hotelColumns.forEach(col => {
-        hotelCat.lines.forEach(line => {
+        (hotelCat.lines || []).forEach(line => {
           const val = col.values[line.id] !== undefined ? col.values[line.id] : col.values[r.id];
           hotelSum += parseMathExpression(val);
         });
       });
     }
 
-    const restCat = savedRestaurantCats[report.reconType][r.id];
+    const restCat = savedRestaurantCats[report.reconType]?.[r.id];
     if (restCat && report.restaurantColumns) {
       report.restaurantColumns.forEach(col => {
-        restCat.lines.forEach(line => {
+        (restCat.lines || []).forEach(line => {
           const val = col.values[line.id] !== undefined ? col.values[line.id] : col.values[r.id];
           restaurantSum += parseMathExpression(val);
         });
       });
     }
     
-    tbSums[r.id] = hotelSum + restaurantSum;
+    hotelSums[r.id] = hotelSum;
+    restaurantSums[r.id] = restaurantSum;
+  });
+
+  const activeKeys = isCards ? ['visa', 'mc', 'discover', 'debit1', 'debit2'] : ['amex'];
+  activeKeys.forEach(key => {
+    let sumHotel = 0;
+    let sumRestaurant = 0;
+    const postings = (report.bankPostings && report.bankPostings[key]) || [];
+    if (postings.length > 0) {
+      postings.forEach(p => {
+        const val = parseMathExpression(p.value);
+        if (p.isRestaurant) {
+          sumRestaurant += val;
+        } else {
+          sumHotel += val;
+        }
+      });
+    } else {
+      sumHotel = parseMathExpression(report.bank ? report.bank[key] : 0);
+    }
+    bankHotel[key] = sumHotel;
+    bankRestaurant[key] = sumRestaurant;
   });
 
   if (isCards) {
-    const visaLedger = tbSums['visa'] + tbSums['visapos'];
-    const visaBank = report.bank['visa'] || 0;
-    breakdownRows.push(['Visa (Sales + POS)', formatCurrency(visaLedger), formatCurrency(visaBank), formatCurrency(visaBank - visaLedger), Math.abs(visaBank - visaLedger) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    // Visa
+    const visaLedgerH = hotelSums['visa'] + hotelSums['visapos'];
+    const visaBankH = bankHotel['visa'] || 0;
+    breakdownRows.push(['Visa - Hotel', formatCurrency(visaLedgerH), formatCurrency(visaBankH), (visaBankH - visaLedgerH > 0.005 ? '+' : '') + formatCurrency(visaBankH - visaLedgerH), Math.abs(visaBankH - visaLedgerH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
-    const mcLedger = tbSums['mc'] + tbSums['mcpos'];
-    const mcBank = report.bank['mc'] || 0;
-    breakdownRows.push(['MasterCard (Sales + POS)', formatCurrency(mcLedger), formatCurrency(mcBank), formatCurrency(mcBank - mcLedger), Math.abs(mcBank - mcLedger) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const visaLedgerR = restaurantSums['visa'] + restaurantSums['visapos'];
+    const visaBankR = bankRestaurant['visa'] || 0;
+    breakdownRows.push(['Visa - Restaurant', formatCurrency(visaLedgerR), formatCurrency(visaBankR), (visaBankR - visaLedgerR > 0.005 ? '+' : '') + formatCurrency(visaBankR - visaLedgerR), Math.abs(visaBankR - visaLedgerR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
-    const discLedger = tbSums['discover'] + tbSums['diner'];
-    const discBank = report.bank['discover'] || 0;
-    breakdownRows.push(['Discover (Discover + Diner)', formatCurrency(discLedger), formatCurrency(discBank), formatCurrency(discBank - discLedger), Math.abs(discBank - discLedger) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    // MC
+    const mcLedgerH = hotelSums['mc'] + hotelSums['mcpos'];
+    const mcBankH = bankHotel['mc'] || 0;
+    breakdownRows.push(['MasterCard - Hotel', formatCurrency(mcLedgerH), formatCurrency(mcBankH), (mcBankH - mcLedgerH > 0.005 ? '+' : '') + formatCurrency(mcBankH - mcLedgerH), Math.abs(mcBankH - mcLedgerH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
-    const d1Ledger = tbSums['debit1'];
-    const d1Bank = report.bank['debit1'] || 0;
-    breakdownRows.push(['Debit 1', formatCurrency(d1Ledger), formatCurrency(d1Bank), formatCurrency(d1Bank - d1Ledger), Math.abs(d1Bank - d1Ledger) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const mcLedgerR = restaurantSums['mc'] + restaurantSums['mcpos'];
+    const mcBankR = bankRestaurant['mc'] || 0;
+    breakdownRows.push(['MasterCard - Restaurant', formatCurrency(mcLedgerR), formatCurrency(mcBankR), (mcBankR - mcLedgerR > 0.005 ? '+' : '') + formatCurrency(mcBankR - mcLedgerR), Math.abs(mcBankR - mcLedgerR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
-    const d2Ledger = tbSums['debit2'];
-    const d2Bank = report.bank['debit2'] || 0;
-    breakdownRows.push(['Debit 2', formatCurrency(d2Ledger), formatCurrency(d2Bank), formatCurrency(d2Bank - d2Ledger), Math.abs(d2Bank - d2Ledger) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    // Discover
+    const discLedgerH = hotelSums['discover'] + hotelSums['diner'];
+    const discBankH = bankHotel['discover'] || 0;
+    breakdownRows.push(['Discover - Hotel', formatCurrency(discLedgerH), formatCurrency(discBankH), (discBankH - discLedgerH > 0.005 ? '+' : '') + formatCurrency(discBankH - discLedgerH), Math.abs(discBankH - discLedgerH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+
+    const discLedgerR = restaurantSums['discover'] + restaurantSums['diner'];
+    const discBankR = bankRestaurant['discover'] || 0;
+    breakdownRows.push(['Discover - Restaurant', formatCurrency(discLedgerR), formatCurrency(discBankR), (discBankR - discLedgerR > 0.005 ? '+' : '') + formatCurrency(discBankR - discLedgerR), Math.abs(discBankR - discLedgerR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+
+    // Debit 1
+    const d1LedgerH = hotelSums['debit1'] || 0;
+    const d1BankH = bankHotel['debit1'] || 0;
+    breakdownRows.push(['Debit 1 - Hotel', formatCurrency(d1LedgerH), formatCurrency(d1BankH), (d1BankH - d1LedgerH > 0.005 ? '+' : '') + formatCurrency(d1BankH - d1LedgerH), Math.abs(d1BankH - d1LedgerH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+
+    const d1LedgerR = restaurantSums['debit1'] || 0;
+    const d1BankR = bankRestaurant['debit1'] || 0;
+    breakdownRows.push(['Debit 1 - Restaurant', formatCurrency(d1LedgerR), formatCurrency(d1BankR), (d1BankR - d1LedgerR > 0.005 ? '+' : '') + formatCurrency(d1BankR - d1LedgerR), Math.abs(d1BankR - d1LedgerR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+
+    // Debit 2
+    const d2LedgerH = hotelSums['debit2'] || 0;
+    const d2BankH = bankHotel['debit2'] || 0;
+    breakdownRows.push(['Debit 2 - Hotel', formatCurrency(d2LedgerH), formatCurrency(d2BankH), (d2BankH - d2LedgerH > 0.005 ? '+' : '') + formatCurrency(d2BankH - d2LedgerH), Math.abs(d2BankH - d2LedgerH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+
+    const d2LedgerR = restaurantSums['debit2'] || 0;
+    const d2BankR = bankRestaurant['debit2'] || 0;
+    breakdownRows.push(['Debit 2 - Restaurant', formatCurrency(d2LedgerR), formatCurrency(d2BankR), (d2BankR - d2LedgerR > 0.005 ? '+' : '') + formatCurrency(d2BankR - d2LedgerR), Math.abs(d2BankR - d2LedgerR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
     breakdownRows.push([
       "TOTALS",
       formatCurrency(report.totalLedger),
       formatCurrency(report.totalBank),
-      formatCurrency(report.netDiscrepancy),
+      (report.netDiscrepancy > 0.005 ? '+' : '') + formatCurrency(report.netDiscrepancy),
       Math.abs(report.netDiscrepancy) <= 0.005 ? "Balanced" : "Out of Balance"
     ]);
   } else {
-    const amexLedger = tbSums['amex'] + tbSums['amexpos'];
-    const amexBank = report.bank['amex'] || 0;
-    const calcFee = amexLedger - amexBank;
-    const calcPercent = amexLedger > 0.005 ? ((calcFee / amexLedger) * 100) : 0;
-    const expectedFee = amexLedger * (amexFeeRateSetting / 100);
+    // Hotel AMEX
+    const amexLedgerH = hotelSums['amex'] + hotelSums['amexpos'];
+    const amexBankH = bankHotel['amex'] || 0;
+    const calcFeeH = amexLedgerH - amexBankH;
+    const calcPercentH = amexLedgerH > 0.005 ? ((calcFeeH / amexLedgerH) * 100) : 0;
+    const expectedFeeH = amexLedgerH * (amexFeeRateSetting / 100);
 
-    let statusText = 'Reconciled';
-    if (calcPercent > amexThresholdRateSetting) {
-      statusText = 'Fee Exceeds Max';
-    } else if (calcFee > expectedFee + 0.005) {
-      statusText = 'Fee Warning';
+    let statusTextH = 'Reconciled';
+    if (calcPercentH > amexThresholdRateSetting) {
+      statusTextH = 'Fee Exceeds Max';
+    } else if (calcFeeH > expectedFeeH + 0.005) {
+      statusTextH = 'Fee Warning';
     }
 
     breakdownRows.push([
-      'American Express (AMEX)', 
-      formatCurrency(amexLedger), 
-      formatCurrency(amexBank), 
-      `${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)`, 
-      formatCurrency(expectedFee), 
-      statusText
+      'American Express - Hotel', 
+      formatCurrency(amexLedgerH), 
+      formatCurrency(amexBankH), 
+      `${formatCurrency(calcFeeH)} (${calcPercentH.toFixed(2)}%)`, 
+      formatCurrency(expectedFeeH), 
+      statusTextH
+    ]);
+
+    // Restaurant AMEX
+    const amexLedgerR = restaurantSums['amex'] + restaurantSums['amexpos'];
+    const amexBankR = bankRestaurant['amex'] || 0;
+    const calcFeeR = amexLedgerR - amexBankR;
+    const calcPercentR = amexLedgerR > 0.005 ? ((calcFeeR / amexLedgerR) * 100) : 0;
+    const expectedFeeR = amexLedgerR * (amexFeeRateSetting / 100);
+
+    let statusTextR = 'Reconciled';
+    if (calcPercentR > amexThresholdRateSetting) {
+      statusTextR = 'Fee Exceeds Max';
+    } else if (calcFeeR > expectedFeeR + 0.005) {
+      statusTextR = 'Fee Warning';
+    }
+
+    breakdownRows.push([
+      'American Express - Restaurant', 
+      formatCurrency(amexLedgerR), 
+      formatCurrency(amexBankR), 
+      `${formatCurrency(calcFeeR)} (${calcPercentR.toFixed(2)}%)`, 
+      formatCurrency(expectedFeeR), 
+      statusTextR
     ]);
 
     const totalCalcFee = report.totalLedger - report.totalBank;
