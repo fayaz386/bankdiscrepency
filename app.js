@@ -3258,10 +3258,29 @@ window.loadLiveStatusBoard = function() {
               : '<span class="status-pill status-discrepant" style="padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="alert-triangle" style="width: 8px; height: 8px;"></i> Out of Balance</span>';
             
             const absNetDiff = Math.abs(netDiscrepancy);
-            const diffClass = netDiscrepancy < -0.005 ? 'val-positive' : (netDiscrepancy > 0.005 ? 'val-negative' : 'val-neutral');
-            const subNote = netDiscrepancy < -0.005 
-              ? ' <span style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); text-transform: uppercase;">(BANK EXTRA)</span>' 
-              : (netDiscrepancy > 0.005 ? ' <span style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); text-transform: uppercase;">(BANK SHORT)</span>' : '');
+            let discrepancyRightHtml = '';
+
+            if (netDiscrepancy < -0.005) {
+              discrepancyRightHtml = `
+                <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 1.35rem; font-weight: 800;" class="val-positive">
+                  <span style="font-size: 1.05rem; font-weight: 800; text-transform: uppercase;">(BANK EXTRA)</span>
+                  <span>${formatCurrency(absNetDiff)}</span>
+                </div>
+              `;
+            } else if (netDiscrepancy > 0.005) {
+              discrepancyRightHtml = `
+                <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 1.35rem; font-weight: 800;" class="val-negative">
+                  <span style="font-size: 1.05rem; font-weight: 800; text-transform: uppercase;">(BANK SHORT)</span>
+                  <span>${formatCurrency(absNetDiff)}</span>
+                </div>
+              `;
+            } else {
+              discrepancyRightHtml = `
+                <div style="font-size: 1.35rem; font-weight: 800;" class="val-neutral">
+                  ${formatCurrency(0)}
+                </div>
+              `;
+            }
             
             // Format Bank Date range in the same style as TB Period (adding the year on the end)
             const earliestBank = matches[0].bankDate;
@@ -3324,8 +3343,9 @@ window.loadLiveStatusBoard = function() {
                 <div><span>Bank Date:</span> <span>${bankDateRange}</span></div>
                 <div><span>Ledger Total:</span> <span>${formatCurrency(totalLedger)}</span></div>
                 <div><span>Bank Total:</span> <span>${formatCurrency(totalBank)}</span></div>
-                <div style="font-weight: bold; border-top: 1px dashed var(--border-color); padding-top: 2px; margin-top: 2px;">
-                  <span>Discrepancy:</span> <span class="${diffClass}">${formatCurrency(absNetDiff)}</span>${subNote}
+                <div style="font-weight: bold; border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 6px; align-items: center;">
+                  <span style="font-size: 0.95rem; align-self: center;">Discrepancy:</span>
+                  ${discrepancyRightHtml}
                 </div>
               </div>
             `;
