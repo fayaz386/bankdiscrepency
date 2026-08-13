@@ -344,26 +344,42 @@ function recalculateSavedHistory() {
       tbSums[row.id] = hotelSum + restaurantSum;
     });
 
+    // Calculate bank values from raw bankPostings if present, otherwise fallback to r.bank
+    const bankSums = {};
+    const activeKeys = isCards ? ['visa', 'mc', 'discover', 'debit1', 'debit2'] : ['amex'];
+    activeKeys.forEach(key => {
+      let sum = 0;
+      const postings = (r.bankPostings && r.bankPostings[key]) || [];
+      if (postings.length > 0) {
+        postings.forEach(p => {
+          sum += parseMathExpression(p.value);
+        });
+      } else {
+        sum = parseMathExpression(r.bank ? r.bank[key] : 0);
+      }
+      bankSums[key] = sum;
+    });
+
     let calculatedTotalLedger = 0;
     let calculatedTotalBank = 0;
 
     if (isCards) {
       const visaLedger = (tbSums['visa'] || 0) + (tbSums['visapos'] || 0);
-      const visaBank = parseMathExpression(r.bank['visa']);
+      const visaBank = bankSums['visa'] || 0;
       const mcLedger = (tbSums['mc'] || 0) + (tbSums['mcpos'] || 0);
-      const mcBank = parseMathExpression(r.bank['mc']);
+      const mcBank = bankSums['mc'] || 0;
       const discLedger = (tbSums['discover'] || 0) + (tbSums['diner'] || 0);
-      const discBank = parseMathExpression(r.bank['discover']);
+      const discBank = bankSums['discover'] || 0;
       const d1Ledger = tbSums['debit1'] || 0;
-      const d1Bank = parseMathExpression(r.bank['debit1']);
+      const d1Bank = bankSums['debit1'] || 0;
       const d2Ledger = tbSums['debit2'] || 0;
-      const d2Bank = parseMathExpression(r.bank['debit2']);
+      const d2Bank = bankSums['debit2'] || 0;
 
       calculatedTotalLedger = visaLedger + mcLedger + discLedger + d1Ledger + d2Ledger;
       calculatedTotalBank = visaBank + mcBank + discBank + d1Bank + d2Bank;
     } else {
       const amexLedger = (tbSums['amex'] || 0) + (tbSums['amexpos'] || 0);
-      const amexBank = parseMathExpression(r.bank['amex']);
+      const amexBank = bankSums['amex'] || 0;
       calculatedTotalLedger = amexLedger;
       calculatedTotalBank = amexBank;
     }
@@ -376,6 +392,7 @@ function recalculateSavedHistory() {
       Math.abs(r.totalBank - calculatedTotalBank) > 0.005 ||
       Math.abs(r.netDiscrepancy - netDiscrepancy) > 0.005
     ) {
+      r.bank = bankSums; // Correct the saved bank object too!
       r.totalLedger = calculatedTotalLedger;
       r.totalBank = calculatedTotalBank;
       r.netDiscrepancy = netDiscrepancy;
