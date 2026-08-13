@@ -251,6 +251,149 @@ app.delete('/api/history/:id', (req, res) => {
   }
 });
 
+// --- DATABASE PATCH: Recalculate historical totals dynamically ---
+function recalculateSavedHistory() {
+  console.log('Running database patch/recalculation for history.json...');
+  const history = readJSON(HISTORY_FILE);
+  if (!Array.isArray(history) || history.length === 0) {
+    console.log('No history records found to patch.');
+    return;
+  }
+
+  // Same math helper logic as client-side to parse and evaluate inputs correctly
+  function parseMathExpression(val) {
+    if (val === undefined || val === null || val === '') return 0;
+    if (typeof val === 'number') return val;
+    const cleanStr = val.toString().replace(/[^0-9.+-]/g, '');
+    const matches = cleanStr.match(/[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)/g);
+    if (!matches) return 0;
+    let sum = 0;
+    matches.forEach(m => {
+      const num = parseFloat(m);
+      if (!isNaN(num)) sum += num;
+    });
+    return sum;
+  }
+
+  const CARD_ROWS = [
+    { id: 'visa', name: 'Visa' },
+    { id: 'visapos', name: 'Visa POS' },
+    { id: 'mc', name: 'MasterCard' },
+    { id: 'mcpos', name: 'MC POS' },
+    { id: 'discover', name: 'Discover' },
+    { id: 'diner', name: 'Diner' },
+    { id: 'debit1', name: 'Debit 1' },
+    { id: 'debit2', name: 'Debit 2' }
+  ];
+
+  const AMEX_ROWS = [
+    { id: 'amex', name: 'AMEX' },
+    { id: 'amexpos', name: 'AMEX POS' }
+  ];
+
+  let patchedCount = 0;
+
+  history.forEach(r => {
+    // We only recalculate if the columns exist (hotelColumns, restaurantColumns, etc.)
+    if (!r.hotelColumns || !r.restaurantColumns) return;
+
+    const isCards = r.reconType === 'cards';
+    const rows = isCards ? CARD_ROWS : AMEX_ROWS;
+
+    // Calculate category sums
+    const tbSums = {};
+    rows.forEach(row => {
+      let hotelSum = 0;
+      let restaurantSum = 0;
+
+      const savedHotelCats = r.hotelCategories || {
+        cards: {
+          visa: { name: 'Visa', lines: [{ id: 'visa_0', name: 'Line 1' }] },
+          mc: { name: 'MasterCard', lines: [{ id: 'mc_0', name: 'Line 1' }] },
+          discover: { name: 'Discover', lines: [{ id: 'discover_0', name: 'Line 1' }] },
+          debit1: { name: 'Debit 1', lines: [{ id: 'debit1_0', name: 'Line 1' }] },
+          debit2: { name: 'Debit 2', lines: [{ id: 'debit2_0', name: 'Line 1' }] }
+        },
+        amex: {
+          amex: { name: 'AMEX', lines: [{ id: 'amex_0', name: 'Line 1' }] }
+        }
+      };
+      
+      const savedRestaurantCats = r.restaurantCategories || savedHotelCats;
+
+      const hotelCat = savedHotelCats[r.reconType]?.[row.id];
+      if (hotelCat && r.hotelColumns) {
+        r.hotelColumns.forEach(col => {
+          (hotelCat.lines || []).forEach(line => {
+            const val = col.values[line.id] !== undefined ? col.values[line.id] : col.values[row.id];
+            hotelSum += parseMathExpression(val);
+          });
+        });
+      }
+
+      const restCat = savedRestaurantCats[r.reconType]?.[row.id];
+      if (restCat && r.restaurantColumns) {
+        r.restaurantColumns.forEach(col => {
+          (restCat.lines || []).forEach(line => {
+            const val = col.values[line.id] !== undefined ? col.values[line.id] : col.values[row.id];
+            restaurantSum += parseMathExpression(val);
+          });
+        });
+      }
+
+      tbSums[row.id] = hotelSum + restaurantSum;
+    });
+
+    let calculatedTotalLedger = 0;
+    let calculatedTotalBank = 0;
+
+    if (isCards) {
+      const visaLedger = (tbSums['visa'] || 0) + (tbSums['visapos'] || 0);
+      const visaBank = parseMathExpression(r.bank['visa']);
+      const mcLedger = (tbSums['mc'] || 0) + (tbSums['mcpos'] || 0);
+      const mcBank = parseMathExpression(r.bank['mc']);
+      const discLedger = (tbSums['discover'] || 0) + (tbSums['diner'] || 0);
+      const discBank = parseMathExpression(r.bank['discover']);
+      const d1Ledger = tbSums['debit1'] || 0;
+      const d1Bank = parseMathExpression(r.bank['debit1']);
+      const d2Ledger = tbSums['debit2'] || 0;
+      const d2Bank = parseMathExpression(r.bank['debit2']);
+
+      calculatedTotalLedger = visaLedger + mcLedger + discLedger + d1Ledger + d2Ledger;
+      calculatedTotalBank = visaBank + mcBank + discBank + d1Bank + d2Bank;
+    } else {
+      const amexLedger = (tbSums['amex'] || 0) + (tbSums['amexpos'] || 0);
+      const amexBank = parseMathExpression(r.bank['amex']);
+      calculatedTotalLedger = amexLedger;
+      calculatedTotalBank = amexBank;
+    }
+
+    const netDiscrepancy = calculatedTotalBank - calculatedTotalLedger;
+
+    // Check if the old totals differ from the new ones
+    if (
+      Math.abs(r.totalLedger - calculatedTotalLedger) > 0.005 ||
+      Math.abs(r.totalBank - calculatedTotalBank) > 0.005 ||
+      Math.abs(r.netDiscrepancy - netDiscrepancy) > 0.005
+    ) {
+      r.totalLedger = calculatedTotalLedger;
+      r.totalBank = calculatedTotalBank;
+      r.netDiscrepancy = netDiscrepancy;
+      patchedCount++;
+    }
+  });
+
+  if (patchedCount > 0) {
+    writeJSON(HISTORY_FILE, history);
+    console.log(`Successfully patched and saved ${patchedCount} records in history.json.`);
+  } else {
+    console.log('All historical records are already up to date.');
+  }
+}
+
+// Run the database patch on startup
+recalculateSavedHistory();
+
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`====================================================`);
