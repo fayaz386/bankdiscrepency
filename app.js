@@ -86,7 +86,7 @@ let companyTabsContainer, subTabsContainer;
 let hotelLabelsContainer, hotelColumnsContainer, btnAddHotelCol;
 let restaurantLabelsContainer, restaurantColumnsContainer, btnAddRestaurantCol;
 let bankLabelsContainer, bankColumnsContainer, bankBadgeTitle;
-let btnSave, btnClear, reconTbody, selectLoadHistory, btnRefresh;
+let btnSave, btnClear, reconTbody, selectLoadHistory, btnRefresh, btnNewEntry;
 let totalLedgerDisplay, totalBankDisplay, netDiscrepancyDisplay, discrepancyIcon, discrepancyIconContainer;
 let historyTbody, historyCount, noHistoryMessage;
 let historyFromDate, historyToDate, historyStatusFilter;
@@ -132,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
   reconTbody = document.getElementById('recon-tbody');
   selectLoadHistory = document.getElementById('select-load-history');
   btnRefresh = document.getElementById('btn-refresh');
+  btnNewEntry = document.getElementById('btn-new-entry');
   
   totalLedgerDisplay = document.getElementById('total-ledger-display');
   totalBankDisplay = document.getElementById('total-bank-display');
@@ -227,6 +228,14 @@ document.addEventListener('DOMContentLoaded', () => {
     btnRefresh.addEventListener('click', () => {
       loadDataFromServer();
       showToast('Data refreshed from server.', 'success');
+    });
+  }
+  if (btnNewEntry) {
+    btnNewEntry.addEventListener('click', () => {
+      if (confirm('Start a new entry? This will clear all numbers in the current workspace.')) {
+        resetAppInputs();
+        showToast('Ready for new entry.', 'info');
+      }
     });
   }
   
@@ -2757,6 +2766,9 @@ function toggleWorkspaceView(mode) {
     if (selectLoadHistory) {
       selectLoadHistory.style.display = 'none';
     }
+    if (btnNewEntry) {
+      btnNewEntry.style.display = 'none';
+    }
 
     loadLiveStatusBoard();
   } else {
@@ -2803,6 +2815,9 @@ function toggleWorkspaceView(mode) {
     if (selectLoadHistory) {
       selectLoadHistory.style.display = '';
       populateHistoryDropdown();
+    }
+    if (btnNewEntry) {
+      btnNewEntry.style.display = 'inline-flex';
     }
 
     lucide.createIcons();
