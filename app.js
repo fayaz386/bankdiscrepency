@@ -829,8 +829,18 @@ function renderBankInputsList() {
 
     // Input fields row
     const postings = bankPostings[cat.id] || [];
+    const isAmex = activeTab === 'amex';
+    const flagLabelText = isAmex ? 'C' : 'R';
+    const flagTitleText = isAmex 
+      ? 'Combine Hotel & Restaurant TBs for this AMEX statement line' 
+      : 'Flag this statement line as Restaurant';
+    const flagColor = isAmex ? 'var(--accent-purple)' : 'var(--accent-orange)';
+
     postings.forEach((post, index) => {
       if (post.isRestaurant === undefined) post.isRestaurant = false;
+      if (post.isCombined === undefined) post.isCombined = true; // Default true for AMEX
+
+      const isChecked = isAmex ? post.isCombined : post.isRestaurant;
 
       const inputCell = document.createElement('div');
       inputCell.className = 'sheet-value-cell';
@@ -843,9 +853,9 @@ function renderBankInputsList() {
           <span>$</span>
           <input type="text" id="bank-post-${post.id}" placeholder="0.00" value="${post.value}" style="width: 100%;">
         </div>
-        <label class="restaurant-flag-label" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; color: var(--text-secondary); cursor: pointer; user-select: none; margin-bottom: 0; padding: 2px 4px; background: rgba(255,255,255,0.03); border: 1px dashed var(--border-color); border-radius: var(--border-radius-xs);" title="Flag this line as Restaurant">
-          <input type="checkbox" id="bank-post-restaurant-${post.id}" ${post.isRestaurant ? 'checked' : ''} style="margin: 0; cursor: pointer; width: 12px; height: 12px;">
-          <span style="font-weight: bold; color: var(--accent-orange);">R</span>
+        <label class="restaurant-flag-label" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; color: var(--text-secondary); cursor: pointer; user-select: none; margin-bottom: 0; padding: 2px 4px; background: rgba(255,255,255,0.03); border: 1px dashed var(--border-color); border-radius: var(--border-radius-xs);" title="${flagTitleText}">
+          <input type="checkbox" id="bank-post-flag-${post.id}" ${isChecked ? 'checked' : ''} style="margin: 0; cursor: pointer; width: 12px; height: 12px;">
+          <span style="font-weight: bold; color: ${flagColor};">${flagLabelText}</span>
         </label>
       `;
       col.appendChild(inputCell);
@@ -858,7 +868,11 @@ function renderBankInputsList() {
 
       const checkbox = inputCell.querySelector('input[type="checkbox"]');
       checkbox.addEventListener('change', (e) => {
-        post.isRestaurant = e.target.checked;
+        if (isAmex) {
+          post.isCombined = e.target.checked;
+        } else {
+          post.isRestaurant = e.target.checked;
+        }
         calculateReconciliation();
       });
     });
@@ -1109,13 +1123,22 @@ function runReconciliationLogic() {
 
   } else {
     // AMEX Reconciliation
-    const amexLedgerH = hotelSums['amex'] + hotelSums['amexpos'];
-    const amexBankH = result.bankHotel['amex'] || 0;
-    result.rows.push({ name: 'American Express - Hotel', ledger: amexLedgerH, bank: amexBankH, diff: amexBankH - amexLedgerH });
+    const amexPostings = bankPostings['amex'] || [];
+    const isCombined = amexPostings.some(p => p.isCombined !== false);
 
-    const amexLedgerR = restaurantSums['amex'] + restaurantSums['amexpos'];
-    const amexBankR = result.bankRestaurant['amex'] || 0;
-    result.rows.push({ name: 'American Express - Restaurant', ledger: amexLedgerR, bank: amexBankR, diff: amexBankR - amexLedgerR });
+    if (isCombined) {
+      const amexLedger = (hotelSums['amex'] || 0) + (hotelSums['amexpos'] || 0) + (restaurantSums['amex'] || 0) + (restaurantSums['amexpos'] || 0);
+      const amexBank = result.bank['amex'] || 0;
+      result.rows.push({ name: 'American Express (AMEX)', ledger: amexLedger, bank: amexBank, diff: amexBank - amexLedger });
+    } else {
+      const amexLedgerH = (hotelSums['amex'] || 0) + (hotelSums['amexpos'] || 0);
+      const amexBankH = result.bankHotel['amex'] || 0;
+      result.rows.push({ name: 'American Express - Hotel', ledger: amexLedgerH, bank: amexBankH, diff: amexBankH - amexLedgerH });
+
+      const amexLedgerR = (restaurantSums['amex'] || 0) + (restaurantSums['amexpos'] || 0);
+      const amexBankR = result.bankRestaurant['amex'] || 0;
+      result.rows.push({ name: 'American Express - Restaurant', ledger: amexLedgerR, bank: amexBankR, diff: amexBankR - amexLedgerR });
+    }
   }
 
   // 4. Calculate Totals
@@ -2465,51 +2488,78 @@ function exportReportToPDF(id) {
       Math.abs(report.netDiscrepancy) <= 0.005 ? "Balanced" : "Out of Balance"
     ]);
   } else {
-    // Hotel AMEX
-    const amexLedgerH = hotelSums['amex'] + hotelSums['amexpos'];
-    const amexBankH = bankHotel['amex'] || 0;
-    const calcFeeH = amexLedgerH - amexBankH;
-    const calcPercentH = amexLedgerH > 0.005 ? ((calcFeeH / amexLedgerH) * 100) : 0;
-    const expectedFeeH = amexLedgerH * (amexFeeRateSetting / 100);
+    const amexPostings = (report.bankPostings && report.bankPostings['amex']) || [];
+    const isCombined = amexPostings.some(p => p.isCombined !== false);
 
-    let statusTextH = 'Reconciled';
-    if (calcPercentH > amexThresholdRateSetting) {
-      statusTextH = 'Fee Exceeds Max';
-    } else if (calcFeeH > expectedFeeH + 0.005) {
-      statusTextH = 'Fee Warning';
+    if (isCombined) {
+      const amexLedger = (hotelSums['amex'] || 0) + (hotelSums['amexpos'] || 0) + (restaurantSums['amex'] || 0) + (restaurantSums['amexpos'] || 0);
+      const amexBank = parseMathExpression(report.bank ? report.bank['amex'] : 0);
+      const calcFee = amexLedger - amexBank;
+      const calcPercent = amexLedger > 0.005 ? ((calcFee / amexLedger) * 100) : 0;
+      const expectedFee = amexLedger * (amexFeeRateSetting / 100);
+
+      let statusText = 'Reconciled';
+      if (calcPercent > amexThresholdRateSetting) {
+        statusText = 'Fee Exceeds Max';
+      } else if (calcFee > expectedFee + 0.005) {
+        statusText = 'Fee Warning';
+      }
+
+      breakdownRows.push([
+        'American Express (AMEX)', 
+        formatCurrency(amexLedger), 
+        formatCurrency(amexBank), 
+        `${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)`, 
+        formatCurrency(expectedFee), 
+        statusText
+      ]);
+    } else {
+      // Hotel AMEX
+      const amexLedgerH = (hotelSums['amex'] || 0) + (hotelSums['amexpos'] || 0);
+      const amexBankH = bankHotel['amex'] || 0;
+      const calcFeeH = amexLedgerH - amexBankH;
+      const calcPercentH = amexLedgerH > 0.005 ? ((calcFeeH / amexLedgerH) * 100) : 0;
+      const expectedFeeH = amexLedgerH * (amexFeeRateSetting / 100);
+
+      let statusTextH = 'Reconciled';
+      if (calcPercentH > amexThresholdRateSetting) {
+        statusTextH = 'Fee Exceeds Max';
+      } else if (calcFeeH > expectedFeeH + 0.005) {
+        statusTextH = 'Fee Warning';
+      }
+
+      breakdownRows.push([
+        'American Express - Hotel', 
+        formatCurrency(amexLedgerH), 
+        formatCurrency(amexBankH), 
+        `${formatCurrency(calcFeeH)} (${calcPercentH.toFixed(2)}%)`, 
+        formatCurrency(expectedFeeH), 
+        statusTextH
+      ]);
+
+      // Restaurant AMEX
+      const amexLedgerR = (restaurantSums['amex'] || 0) + (restaurantSums['amexpos'] || 0);
+      const amexBankR = bankRestaurant['amex'] || 0;
+      const calcFeeR = amexLedgerR - amexBankR;
+      const calcPercentR = amexLedgerR > 0.005 ? ((calcFeeR / amexLedgerR) * 100) : 0;
+      const expectedFeeR = amexLedgerR * (amexFeeRateSetting / 100);
+
+      let statusTextR = 'Reconciled';
+      if (calcPercentR > amexThresholdRateSetting) {
+        statusTextR = 'Fee Exceeds Max';
+      } else if (calcFeeR > expectedFeeR + 0.005) {
+        statusTextR = 'Fee Warning';
+      }
+
+      breakdownRows.push([
+        'American Express - Restaurant', 
+        formatCurrency(amexLedgerR), 
+        formatCurrency(amexBankR), 
+        `${formatCurrency(calcFeeR)} (${calcPercentR.toFixed(2)}%)`, 
+        formatCurrency(expectedFeeR), 
+        statusTextR
+      ]);
     }
-
-    breakdownRows.push([
-      'American Express - Hotel', 
-      formatCurrency(amexLedgerH), 
-      formatCurrency(amexBankH), 
-      `${formatCurrency(calcFeeH)} (${calcPercentH.toFixed(2)}%)`, 
-      formatCurrency(expectedFeeH), 
-      statusTextH
-    ]);
-
-    // Restaurant AMEX
-    const amexLedgerR = restaurantSums['amex'] + restaurantSums['amexpos'];
-    const amexBankR = bankRestaurant['amex'] || 0;
-    const calcFeeR = amexLedgerR - amexBankR;
-    const calcPercentR = amexLedgerR > 0.005 ? ((calcFeeR / amexLedgerR) * 100) : 0;
-    const expectedFeeR = amexLedgerR * (amexFeeRateSetting / 100);
-
-    let statusTextR = 'Reconciled';
-    if (calcPercentR > amexThresholdRateSetting) {
-      statusTextR = 'Fee Exceeds Max';
-    } else if (calcFeeR > expectedFeeR + 0.005) {
-      statusTextR = 'Fee Warning';
-    }
-
-    breakdownRows.push([
-      'American Express - Restaurant', 
-      formatCurrency(amexLedgerR), 
-      formatCurrency(amexBankR), 
-      `${formatCurrency(calcFeeR)} (${calcPercentR.toFixed(2)}%)`, 
-      formatCurrency(expectedFeeR), 
-      statusTextR
-    ]);
 
     const totalCalcFee = report.totalLedger - report.totalBank;
     const totalCalcPercent = report.totalLedger > 0.005 ? ((totalCalcFee / report.totalLedger) * 100) : 0;
