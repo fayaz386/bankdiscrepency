@@ -290,11 +290,13 @@ function parseMathExpression(val) {
   if (val === undefined || val === null || val === '') return 0;
   if (typeof val === 'number') return val;
   
-  const parts = val.toString().split('+');
+  const cleanStr = val.toString().replace(/[^0-9.+-]/g, '');
+  const matches = cleanStr.match(/[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)/g);
+  if (!matches) return 0;
+  
   let sum = 0;
-  parts.forEach(p => {
-    const cleaned = p.replace(/[^0-9.]/g, '');
-    const num = parseFloat(cleaned);
+  matches.forEach(m => {
+    const num = parseFloat(m);
     if (!isNaN(num)) {
       sum += num;
     }
