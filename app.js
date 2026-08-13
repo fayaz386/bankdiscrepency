@@ -1259,11 +1259,11 @@ function calculateReconciliation() {
       let subLabel = '';
       if (!isAllZero) {
         if (r.diff < -0.005) {
-          diffClass = 'val-negative';
-          subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
-        } else if (r.diff > 0.005) {
           diffClass = 'val-positive';
-          subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
+          subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
+        } else if (r.diff > 0.005) {
+          diffClass = 'val-negative';
+          subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
         }
       }
       let statusText = '';
@@ -1355,11 +1355,11 @@ function calculateReconciliation() {
     let netSubLabel = '';
     if (!isAllZero) {
       if (netDiff < -0.005) {
-        netClass = 'val-negative';
-        netSubLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
-      } else if (netDiff > 0.005) {
         netClass = 'val-positive';
-        netSubLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
+        netSubLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
+      } else if (netDiff > 0.005) {
+        netClass = 'val-negative';
+        netSubLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
       }
     }
     let netStatus = '';
@@ -1396,17 +1396,17 @@ function calculateReconciliation() {
       discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-green)');
       discCard.style.boxShadow = 'none';
     } else if (netDiff < -0.005) {
-      netDiscrepancyDisplay.className = 'val-negative';
-      if (discLabel) discLabel.textContent = 'Net Discrepancy (BANK EXTRA)';
-      discrepancyIcon.setAttribute('data-lucide', 'alert-circle');
-      discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-red)');
-      discCard.style.boxShadow = '0 0 20px rgba(239, 68, 68, 0.15)';
-    } else {
       netDiscrepancyDisplay.className = 'val-positive';
-      if (discLabel) discLabel.textContent = 'Net Discrepancy (BANK SHORT)';
+      if (discLabel) discLabel.textContent = 'Net Discrepancy (BANK EXTRA)';
       discrepancyIcon.setAttribute('data-lucide', 'alert-circle');
       discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-green)');
       discCard.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.15)';
+    } else {
+      netDiscrepancyDisplay.className = 'val-negative';
+      if (discLabel) discLabel.textContent = 'Net Discrepancy (BANK SHORT)';
+      discrepancyIcon.setAttribute('data-lucide', 'alert-circle');
+      discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-red)');
+      discCard.style.boxShadow = '0 0 20px rgba(239, 68, 68, 0.15)';
     }
   }
 
@@ -1857,11 +1857,11 @@ function renderHistoryTable() {
       let subLabel = '';
 
       if (netDiff < -0.005) {
-        diffClass = 'val-negative';
-        subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
-      } else if (netDiff > 0.005) {
         diffClass = 'val-positive';
-        subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
+        subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
+      } else if (netDiff > 0.005) {
+        diffClass = 'val-negative';
+        subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
       }
 
       const statusText = Math.abs(netDiff) <= 0.005 
@@ -3207,7 +3207,8 @@ window.loadLiveStatusBoard = function() {
               ? '<span class="status-pill status-reconciled" style="padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="check" style="width: 8px; height: 8px;"></i> Balanced</span>'
               : '<span class="status-pill status-discrepant" style="padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="alert-triangle" style="width: 8px; height: 8px;"></i> Out of Balance</span>';
             
-            const diffClass = netDiscrepancy > 0.005 ? 'val-positive' : (netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
+            const diffClass = netDiscrepancy < -0.005 ? 'val-positive' : (netDiscrepancy > 0.005 ? 'val-negative' : 'val-neutral');
+            const subNote = netDiscrepancy < -0.005 ? ' (BANK EXTRA)' : (netDiscrepancy > 0.005 ? ' (BANK SHORT)' : '');
             
             // Format Bank Date range in the same style as TB Period (adding the year on the end)
             const earliestBank = matches[0].bankDate;
