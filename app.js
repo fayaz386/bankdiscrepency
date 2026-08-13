@@ -1254,7 +1254,18 @@ function calculateReconciliation() {
       `;
     } else {
       // Cards layout: standard columns
-      const diffClass = r.diff > 0.005 ? 'val-positive' : (r.diff < -0.005 ? 'val-negative' : 'val-neutral');
+      const absDiff = Math.abs(r.diff);
+      let diffClass = 'val-neutral';
+      let subLabel = '';
+      if (!isAllZero) {
+        if (r.diff < -0.005) {
+          diffClass = 'val-negative';
+          subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
+        } else if (r.diff > 0.005) {
+          diffClass = 'val-positive';
+          subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
+        }
+      }
       let statusText = '';
       if (!isAllZero) {
         statusText = Math.abs(r.diff) <= 0.005 
@@ -1266,7 +1277,10 @@ function calculateReconciliation() {
         <td><strong>${r.name}</strong></td>
         <td class="num-col">${formatCurrency(r.ledger)}</td>
         <td class="num-col">${formatCurrency(r.bank)}</td>
-        <td class="num-col ${diffClass}">${r.diff > 0.005 ? '+' : ''}${formatCurrency(r.diff)}</td>
+        <td class="num-col">
+          <span class="${diffClass}">${formatCurrency(absDiff)}</span>
+          ${subLabel}
+        </td>
         <td>${statusText}</td>
       `;
     }
@@ -1335,10 +1349,22 @@ function calculateReconciliation() {
     }
   } else {
     // Standard cards layout
-    const netClass = result.netDiscrepancy > 0.005 ? 'val-positive' : (result.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
+    const netDiff = result.netDiscrepancy;
+    const absNetDiff = Math.abs(netDiff);
+    let netClass = 'val-neutral';
+    let netSubLabel = '';
+    if (!isAllZero) {
+      if (netDiff < -0.005) {
+        netClass = 'val-negative';
+        netSubLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
+      } else if (netDiff > 0.005) {
+        netClass = 'val-positive';
+        netSubLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
+      }
+    }
     let netStatus = '';
     if (!isAllZero) {
-      netStatus = Math.abs(result.netDiscrepancy) <= 0.005 
+      netStatus = Math.abs(netDiff) <= 0.005 
         ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Balanced</span>' 
         : '<span class="status-pill status-discrepant"><i data-lucide="alert-circle"></i> Out of Balance</span>';
     }
@@ -1347,7 +1373,10 @@ function calculateReconciliation() {
       <td>TOTALS</td>
       <td class="num-col">${formatCurrency(result.totalLedger)}</td>
       <td class="num-col">${formatCurrency(result.totalBank)}</td>
-      <td class="num-col ${netClass}">${result.netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(result.netDiscrepancy)}</td>
+      <td class="num-col">
+        <span class="${netClass}">${formatCurrency(absNetDiff)}</span>
+        ${netSubLabel}
+      </td>
       <td>${netStatus}</td>
     `;
     reconTbody.appendChild(totalRow);
@@ -1355,20 +1384,29 @@ function calculateReconciliation() {
     // Update Summary displays
     totalLedgerDisplay.textContent = formatCurrency(result.totalLedger);
     totalBankDisplay.textContent = formatCurrency(result.totalBank);
-    netDiscrepancyDisplay.textContent = (result.netDiscrepancy > 0.005 ? '+' : '') + formatCurrency(result.netDiscrepancy);
+    netDiscrepancyDisplay.textContent = formatCurrency(absNetDiff);
 
     const discCard = document.getElementById('card-discrepancy');
-    if (Math.abs(result.netDiscrepancy) <= 0.005) {
+    const discLabel = document.getElementById('discrepancy-label-text');
+
+    if (Math.abs(netDiff) <= 0.005) {
       netDiscrepancyDisplay.className = 'val-neutral';
+      if (discLabel) discLabel.textContent = 'Net Discrepancy';
       discrepancyIcon.setAttribute('data-lucide', 'check-circle-2');
       discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-green)');
       discCard.style.boxShadow = 'none';
-    } else {
-      netDiscrepancyDisplay.className = result.netDiscrepancy > 0 ? 'val-positive' : 'val-negative';
+    } else if (netDiff < -0.005) {
+      netDiscrepancyDisplay.className = 'val-negative';
+      if (discLabel) discLabel.textContent = 'Net Discrepancy (BANK EXTRA)';
       discrepancyIcon.setAttribute('data-lucide', 'alert-circle');
-      discrepancyIconContainer.style.setProperty('--icon-color', result.netDiscrepancy > 0 ? 'var(--accent-green)' : 'var(--accent-red)');
-      const pulseColor = result.netDiscrepancy > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
-      discCard.style.boxShadow = `0 0 20px ${pulseColor}`;
+      discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-red)');
+      discCard.style.boxShadow = '0 0 20px rgba(239, 68, 68, 0.15)';
+    } else {
+      netDiscrepancyDisplay.className = 'val-positive';
+      if (discLabel) discLabel.textContent = 'Net Discrepancy (BANK SHORT)';
+      discrepancyIcon.setAttribute('data-lucide', 'alert-circle');
+      discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-green)');
+      discCard.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.15)';
     }
   }
 
@@ -1813,8 +1851,20 @@ function renderHistoryTable() {
         </td>
       `;
     } else {
-      const diffClass = r.netDiscrepancy > 0.005 ? 'val-positive' : (r.netDiscrepancy < -0.005 ? 'val-negative' : 'val-neutral');
-      const statusText = Math.abs(r.netDiscrepancy) <= 0.005 
+      const netDiff = r.netDiscrepancy;
+      const absNetDiff = Math.abs(netDiff);
+      let diffClass = 'val-neutral';
+      let subLabel = '';
+
+      if (netDiff < -0.005) {
+        diffClass = 'val-negative';
+        subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
+      } else if (netDiff > 0.005) {
+        diffClass = 'val-positive';
+        subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
+      }
+
+      const statusText = Math.abs(netDiff) <= 0.005 
         ? '<span class="status-pill status-reconciled"><i data-lucide="check"></i> Reconciled</span>' 
         : '<span class="status-pill status-discrepant"><i data-lucide="alert-triangle"></i> Discrepant</span>';
 
@@ -1823,7 +1873,10 @@ function renderHistoryTable() {
         <td>${r.bankDate}</td>
         <td class="num-col">${formatCurrency(r.totalLedger)}</td>
         <td class="num-col">${formatCurrency(r.totalBank)}</td>
-        <td class="num-col ${diffClass}">${r.netDiscrepancy > 0.005 ? '+' : ''}${formatCurrency(r.netDiscrepancy)}</td>
+        <td class="num-col">
+          <span class="${diffClass}">${formatCurrency(absNetDiff)}</span>
+          ${subLabel}
+        </td>
         <td>${statusText}</td>
         <td style="font-size: 0.75rem; color: var(--text-secondary);">${timeStr}</td>
         <td class="actions-col">
@@ -2052,19 +2105,30 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
   const breakdownRows = [];
   if (isCards) {
     result.rows.forEach(r => {
+      const absDiff = Math.abs(r.diff);
+      let note = '';
+      if (r.diff < -0.005) note = ' (BANK EXTRA)';
+      else if (r.diff > 0.005) note = ' (BANK SHORT)';
+
       breakdownRows.push([
         r.name,
         formatCurrency(r.ledger),
         formatCurrency(r.bank),
-        (r.diff > 0.005 ? '+' : '') + formatCurrency(r.diff),
+        formatCurrency(absDiff) + note,
         Math.abs(r.diff) <= 0.005 ? "Reconciled" : "Discrepant"
       ]);
     });
+
+    const absNetDiff = Math.abs(result.netDiscrepancy);
+    let netNote = '';
+    if (result.netDiscrepancy < -0.005) netNote = ' (BANK EXTRA)';
+    else if (result.netDiscrepancy > 0.005) netNote = ' (BANK SHORT)';
+
     breakdownRows.push([
       "TOTALS",
       formatCurrency(result.totalLedger),
       formatCurrency(result.totalBank),
-      (result.netDiscrepancy > 0.005 ? '+' : '') + formatCurrency(result.netDiscrepancy),
+      formatCurrency(absNetDiff) + netNote,
       Math.abs(result.netDiscrepancy) <= 0.005 ? "Balanced" : "Out of Balance"
     ]);
   } else {
@@ -2331,56 +2395,73 @@ function exportReportToPDF(id) {
   });
 
   if (isCards) {
+    const fmtDiff = (d) => {
+      const abs = Math.abs(d);
+      if (d < -0.005) return `${formatCurrency(abs)} (BANK EXTRA)`;
+      if (d > 0.005) return `${formatCurrency(abs)} (BANK SHORT)`;
+      return formatCurrency(abs);
+    };
+
     // Visa
     const visaLedgerH = hotelSums['visa'] + hotelSums['visapos'];
     const visaBankH = bankHotel['visa'] || 0;
-    breakdownRows.push(['Visa - Hotel', formatCurrency(visaLedgerH), formatCurrency(visaBankH), (visaBankH - visaLedgerH > 0.005 ? '+' : '') + formatCurrency(visaBankH - visaLedgerH), Math.abs(visaBankH - visaLedgerH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const vDiffH = visaBankH - visaLedgerH;
+    breakdownRows.push(['Visa - Hotel', formatCurrency(visaLedgerH), formatCurrency(visaBankH), fmtDiff(vDiffH), Math.abs(vDiffH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
     const visaLedgerR = restaurantSums['visa'] + restaurantSums['visapos'];
     const visaBankR = bankRestaurant['visa'] || 0;
-    breakdownRows.push(['Visa - Restaurant', formatCurrency(visaLedgerR), formatCurrency(visaBankR), (visaBankR - visaLedgerR > 0.005 ? '+' : '') + formatCurrency(visaBankR - visaLedgerR), Math.abs(visaBankR - visaLedgerR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const vDiffR = visaBankR - visaLedgerR;
+    breakdownRows.push(['Visa - Restaurant', formatCurrency(visaLedgerR), formatCurrency(visaBankR), fmtDiff(vDiffR), Math.abs(vDiffR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
     // MC
     const mcLedgerH = hotelSums['mc'] + hotelSums['mcpos'];
     const mcBankH = bankHotel['mc'] || 0;
-    breakdownRows.push(['MasterCard - Hotel', formatCurrency(mcLedgerH), formatCurrency(mcBankH), (mcBankH - mcLedgerH > 0.005 ? '+' : '') + formatCurrency(mcBankH - mcLedgerH), Math.abs(mcBankH - mcLedgerH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const mcDiffH = mcBankH - mcLedgerH;
+    breakdownRows.push(['MasterCard - Hotel', formatCurrency(mcLedgerH), formatCurrency(mcBankH), fmtDiff(mcDiffH), Math.abs(mcDiffH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
     const mcLedgerR = restaurantSums['mc'] + restaurantSums['mcpos'];
     const mcBankR = bankRestaurant['mc'] || 0;
-    breakdownRows.push(['MasterCard - Restaurant', formatCurrency(mcLedgerR), formatCurrency(mcBankR), (mcBankR - mcLedgerR > 0.005 ? '+' : '') + formatCurrency(mcBankR - mcLedgerR), Math.abs(mcBankR - mcLedgerR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const mcDiffR = mcBankR - mcLedgerR;
+    breakdownRows.push(['MasterCard - Restaurant', formatCurrency(mcLedgerR), formatCurrency(mcBankR), fmtDiff(mcDiffR), Math.abs(mcDiffR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
     // Discover
     const discLedgerH = hotelSums['discover'] + hotelSums['diner'];
     const discBankH = bankHotel['discover'] || 0;
-    breakdownRows.push(['Discover - Hotel', formatCurrency(discLedgerH), formatCurrency(discBankH), (discBankH - discLedgerH > 0.005 ? '+' : '') + formatCurrency(discBankH - discLedgerH), Math.abs(discBankH - discLedgerH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const discDiffH = discBankH - discLedgerH;
+    breakdownRows.push(['Discover - Hotel', formatCurrency(discLedgerH), formatCurrency(discBankH), fmtDiff(discDiffH), Math.abs(discDiffH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
     const discLedgerR = restaurantSums['discover'] + restaurantSums['diner'];
     const discBankR = bankRestaurant['discover'] || 0;
-    breakdownRows.push(['Discover - Restaurant', formatCurrency(discLedgerR), formatCurrency(discBankR), (discBankR - discLedgerR > 0.005 ? '+' : '') + formatCurrency(discBankR - discLedgerR), Math.abs(discBankR - discLedgerR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const discDiffR = discBankR - discLedgerR;
+    breakdownRows.push(['Discover - Restaurant', formatCurrency(discLedgerR), formatCurrency(discBankR), fmtDiff(discDiffR), Math.abs(discDiffR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
     // Debit 1
     const d1LedgerH = hotelSums['debit1'] || 0;
     const d1BankH = bankHotel['debit1'] || 0;
-    breakdownRows.push(['Debit 1 - Hotel', formatCurrency(d1LedgerH), formatCurrency(d1BankH), (d1BankH - d1LedgerH > 0.005 ? '+' : '') + formatCurrency(d1BankH - d1LedgerH), Math.abs(d1BankH - d1LedgerH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const d1DiffH = d1BankH - d1LedgerH;
+    breakdownRows.push(['Debit 1 - Hotel', formatCurrency(d1LedgerH), formatCurrency(d1BankH), fmtDiff(d1DiffH), Math.abs(d1DiffH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
     const d1LedgerR = restaurantSums['debit1'] || 0;
     const d1BankR = bankRestaurant['debit1'] || 0;
-    breakdownRows.push(['Debit 1 - Restaurant', formatCurrency(d1LedgerR), formatCurrency(d1BankR), (d1BankR - d1LedgerR > 0.005 ? '+' : '') + formatCurrency(d1BankR - d1LedgerR), Math.abs(d1BankR - d1LedgerR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const d1DiffR = d1BankR - d1LedgerR;
+    breakdownRows.push(['Debit 1 - Restaurant', formatCurrency(d1LedgerR), formatCurrency(d1BankR), fmtDiff(d1DiffR), Math.abs(d1DiffR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
     // Debit 2
     const d2LedgerH = hotelSums['debit2'] || 0;
     const d2BankH = bankHotel['debit2'] || 0;
-    breakdownRows.push(['Debit 2 - Hotel', formatCurrency(d2LedgerH), formatCurrency(d2BankH), (d2BankH - d2LedgerH > 0.005 ? '+' : '') + formatCurrency(d2BankH - d2LedgerH), Math.abs(d2BankH - d2LedgerH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const d2DiffH = d2BankH - d2LedgerH;
+    breakdownRows.push(['Debit 2 - Hotel', formatCurrency(d2LedgerH), formatCurrency(d2BankH), fmtDiff(d2DiffH), Math.abs(d2DiffH) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
     const d2LedgerR = restaurantSums['debit2'] || 0;
     const d2BankR = bankRestaurant['debit2'] || 0;
-    breakdownRows.push(['Debit 2 - Restaurant', formatCurrency(d2LedgerR), formatCurrency(d2BankR), (d2BankR - d2LedgerR > 0.005 ? '+' : '') + formatCurrency(d2BankR - d2LedgerR), Math.abs(d2BankR - d2LedgerR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
+    const d2DiffR = d2BankR - d2LedgerR;
+    breakdownRows.push(['Debit 2 - Restaurant', formatCurrency(d2LedgerR), formatCurrency(d2BankR), fmtDiff(d2DiffR), Math.abs(d2DiffR) <= 0.005 ? 'Reconciled' : 'Discrepant']);
 
     breakdownRows.push([
       "TOTALS",
       formatCurrency(report.totalLedger),
       formatCurrency(report.totalBank),
-      (report.netDiscrepancy > 0.005 ? '+' : '') + formatCurrency(report.netDiscrepancy),
+      fmtDiff(report.netDiscrepancy),
       Math.abs(report.netDiscrepancy) <= 0.005 ? "Balanced" : "Out of Balance"
     ]);
   } else {
@@ -2834,10 +2915,18 @@ function copySummaryToClipboard() {
     text += `AMEX FEE SUMMARY: Calculated Fee ${formatCurrency(totalCalcFee)} (${totalCalcPercent.toFixed(2)}%) | Expected Fee2 ${formatCurrency(totalExpectedFee)} (${status})\n`;
   } else {
     result.rows.forEach(r => {
-      text += `${r.name}: Ledger Total ${formatCurrency(r.ledger)} | Bank Total ${formatCurrency(r.bank)} | Diff: ${(r.diff > 0 ? '+' : '')}${formatCurrency(r.diff)}\n`;
+      const absDiff = Math.abs(r.diff);
+      let note = '';
+      if (r.diff < -0.005) note = ' (BANK EXTRA)';
+      else if (r.diff > 0.005) note = ' (BANK SHORT)';
+      text += `${r.name}: Ledger Total ${formatCurrency(r.ledger)} | Bank Total ${formatCurrency(r.bank)} | Diff: ${formatCurrency(absDiff)}${note}\n`;
     });
     text += `=========================================\n`;
-    text += `NET DISCREPANCY: ${formatCurrency(result.netDiscrepancy)} (${Math.abs(result.netDiscrepancy) <= 0.005 ? 'Balanced' : 'Out of Balance'})\n`;
+    const absNet = Math.abs(result.netDiscrepancy);
+    let netNote = '';
+    if (result.netDiscrepancy < -0.005) netNote = ' (BANK EXTRA)';
+    else if (result.netDiscrepancy > 0.005) netNote = ' (BANK SHORT)';
+    text += `NET DISCREPANCY: ${formatCurrency(absNet)}${netNote} (${Math.abs(result.netDiscrepancy) <= 0.005 ? 'Balanced' : 'Out of Balance'})\n`;
   }
 
   navigator.clipboard.writeText(text)
