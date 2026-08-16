@@ -1281,10 +1281,10 @@ function calculateReconciliation() {
       let diffClass = 'val-neutral';
       let subLabel = '';
       if (!isAllZero) {
-        if (r.diff < -0.005) {
+        if (r.diff > 0.005) {
           diffClass = 'val-positive';
           subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
-        } else if (r.diff > 0.005) {
+        } else if (r.diff < -0.005) {
           diffClass = 'val-negative';
           subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
         }
@@ -1377,10 +1377,10 @@ function calculateReconciliation() {
     let netClass = 'val-neutral';
     let netSubLabel = '';
     if (!isAllZero) {
-      if (netDiff < -0.005) {
+      if (netDiff > 0.005) {
         netClass = 'val-positive';
         netSubLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
-      } else if (netDiff > 0.005) {
+      } else if (netDiff < -0.005) {
         netClass = 'val-negative';
         netSubLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
       }
@@ -1418,7 +1418,7 @@ function calculateReconciliation() {
       discrepancyIcon.setAttribute('data-lucide', 'check-circle-2');
       discrepancyIconContainer.style.setProperty('--icon-color', 'var(--accent-green)');
       discCard.style.boxShadow = 'none';
-    } else if (netDiff < -0.005) {
+    } else if (netDiff > 0.005) {
       netDiscrepancyDisplay.className = 'val-positive';
       if (discLabel) discLabel.textContent = 'Net Discrepancy (BANK EXTRA)';
       discrepancyIcon.setAttribute('data-lucide', 'alert-circle');
@@ -1879,10 +1879,10 @@ function renderHistoryTable() {
       let diffClass = 'val-neutral';
       let subLabel = '';
 
-      if (netDiff < -0.005) {
+      if (netDiff > 0.005) {
         diffClass = 'val-positive';
         subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-green); margin-top: 1px; text-transform: uppercase;">BANK EXTRA</div>';
-      } else if (netDiff > 0.005) {
+      } else if (netDiff < -0.005) {
         diffClass = 'val-negative';
         subLabel = '<div style="font-size: 0.65rem; font-weight: 700; color: var(--accent-red); margin-top: 1px; text-transform: uppercase;">BANK SHORT</div>';
       }
@@ -2130,8 +2130,8 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
     result.rows.forEach(r => {
       const absDiff = Math.abs(r.diff);
       let note = '';
-      if (r.diff < -0.005) note = ' (BANK EXTRA)';
-      else if (r.diff > 0.005) note = ' (BANK SHORT)';
+      if (r.diff > 0.005) note = ' (BANK EXTRA)';
+      else if (r.diff < -0.005) note = ' (BANK SHORT)';
 
       breakdownRows.push([
         r.name,
@@ -2144,8 +2144,8 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
 
     const absNetDiff = Math.abs(result.netDiscrepancy);
     let netNote = '';
-    if (result.netDiscrepancy < -0.005) netNote = ' (BANK EXTRA)';
-    else if (result.netDiscrepancy > 0.005) netNote = ' (BANK SHORT)';
+    if (result.netDiscrepancy > 0.005) netNote = ' (BANK EXTRA)';
+    else if (result.netDiscrepancy < -0.005) netNote = ' (BANK SHORT)';
 
     breakdownRows.push([
       "TOTALS",
@@ -2420,8 +2420,8 @@ function exportReportToPDF(id) {
   if (isCards) {
     const fmtDiff = (d) => {
       const abs = Math.abs(d);
-      if (d < -0.005) return `${formatCurrency(abs)} (BANK EXTRA)`;
-      if (d > 0.005) return `${formatCurrency(abs)} (BANK SHORT)`;
+      if (d > 0.005) return `${formatCurrency(abs)} (BANK EXTRA)`;
+      if (d < -0.005) return `${formatCurrency(abs)} (BANK SHORT)`;
       return formatCurrency(abs);
     };
 
@@ -2967,15 +2967,15 @@ function copySummaryToClipboard() {
     result.rows.forEach(r => {
       const absDiff = Math.abs(r.diff);
       let note = '';
-      if (r.diff < -0.005) note = ' (BANK EXTRA)';
-      else if (r.diff > 0.005) note = ' (BANK SHORT)';
+      if (r.diff > 0.005) note = ' (BANK EXTRA)';
+      else if (r.diff < -0.005) note = ' (BANK SHORT)';
       text += `${r.name}: Ledger Total ${formatCurrency(r.ledger)} | Bank Total ${formatCurrency(r.bank)} | Diff: ${formatCurrency(absDiff)}${note}\n`;
     });
     text += `=========================================\n`;
     const absNet = Math.abs(result.netDiscrepancy);
     let netNote = '';
-    if (result.netDiscrepancy < -0.005) netNote = ' (BANK EXTRA)';
-    else if (result.netDiscrepancy > 0.005) netNote = ' (BANK SHORT)';
+    if (result.netDiscrepancy > 0.005) netNote = ' (BANK EXTRA)';
+    else if (result.netDiscrepancy < -0.005) netNote = ' (BANK SHORT)';
     text += `NET DISCREPANCY: ${formatCurrency(absNet)}${netNote} (${Math.abs(result.netDiscrepancy) <= 0.005 ? 'Balanced' : 'Out of Balance'})\n`;
   }
 
@@ -3301,14 +3301,14 @@ window.loadLiveStatusBoard = function() {
               
               const absNetDiff = Math.abs(netDiscrepancy);
 
-              if (netDiscrepancy < -0.005) {
+              if (netDiscrepancy > 0.005) {
                 discrepancyRightHtml = `
                   <div style="display: inline-flex; align-items: center; gap: 6px;" class="val-positive">
                     <span style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase;">(BANK EXTRA)</span>
                     <span style="font-size: 1.35rem; font-weight: 800;">${formatCurrency(absNetDiff)}</span>
                   </div>
                 `;
-              } else if (netDiscrepancy > 0.005) {
+              } else if (netDiscrepancy < -0.005) {
                 discrepancyRightHtml = `
                   <div style="display: inline-flex; align-items: center; gap: 6px;" class="val-negative">
                     <span style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase;">(BANK SHORT)</span>
