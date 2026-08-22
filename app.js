@@ -1255,11 +1255,14 @@ function calculateReconciliation() {
       const calcFee = r.ledger - r.bank;
       const calcPercent = r.ledger > 0.005 ? ((calcFee / r.ledger) * 100) : 0;
       const expectedFee = r.ledger * (amexFeeRateSetting / 100);
+      const isRowExceeded = Math.abs(calcPercent) > amexThresholdRateSetting;
       
       let statusText = '';
+      let rowFeeClass = 'val-neutral';
       if (!isAllZero) {
-        if (calcPercent > amexThresholdRateSetting) {
-          statusText = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25);"><i data-lucide="alert-circle"></i> Fee Exceeds Max</span>';
+        if (isRowExceeded) {
+          rowFeeClass = 'val-negative';
+          statusText = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25);"><i data-lucide="alert-circle"></i> Fee > 5%</span>';
         } else if (calcFee > expectedFee + 0.005) {
           statusText = '<span class="status-pill status-discrepant" style="background-color: rgba(245,158,11,0.1); color: var(--accent-yellow); border-color: rgba(245,158,11,0.25);"><i data-lucide="alert-triangle"></i> Fee Warning</span>';
         } else {
@@ -1271,7 +1274,7 @@ function calculateReconciliation() {
         <td><strong>${r.name}</strong></td>
         <td class="num-col">${formatCurrency(r.ledger)}</td>
         <td class="num-col">${formatCurrency(r.bank)}</td>
-        <td class="num-col val-neutral">${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)</td>
+        <td class="num-col ${rowFeeClass}">${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)</td>
         <td class="num-col val-neutral">${formatCurrency(expectedFee)}</td>
         <td>${statusText}</td>
       `;
@@ -1318,11 +1321,14 @@ function calculateReconciliation() {
     const totalCalcFee = result.totalLedger - result.totalBank;
     const totalCalcPercent = result.totalLedger > 0.005 ? ((totalCalcFee / result.totalLedger) * 100) : 0;
     const totalExpectedFee = result.totalLedger * (amexFeeRateSetting / 100);
+    const isExceeded = Math.abs(totalCalcPercent) > amexThresholdRateSetting;
     
     let netStatus = '';
+    let totalFeeClass = 'val-neutral';
     if (!isAllZero) {
-      if (totalCalcPercent > amexThresholdRateSetting) {
-        netStatus = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25);"><i data-lucide="alert-circle"></i> Out of Limit</span>';
+      if (isExceeded) {
+        totalFeeClass = 'val-negative';
+        netStatus = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25);"><i data-lucide="alert-circle"></i> Fee > 5%</span>';
       } else if (totalCalcFee > totalExpectedFee + 0.005) {
         netStatus = '<span class="status-pill status-discrepant" style="background-color: rgba(245,158,11,0.1); color: var(--accent-yellow); border-color: rgba(245,158,11,0.25);"><i data-lucide="alert-triangle"></i> Fee Warning</span>';
       } else {
@@ -1334,7 +1340,7 @@ function calculateReconciliation() {
       <td>TOTALS</td>
       <td class="num-col">${formatCurrency(result.totalLedger)}</td>
       <td class="num-col">${formatCurrency(result.totalBank)}</td>
-      <td class="num-col val-neutral">${formatCurrency(totalCalcFee)} (${totalCalcPercent.toFixed(2)}%)</td>
+      <td class="num-col ${totalFeeClass}">${formatCurrency(totalCalcFee)} (${totalCalcPercent.toFixed(2)}%)</td>
       <td class="num-col val-neutral">${formatCurrency(totalExpectedFee)}</td>
       <td>${netStatus}</td>
     `;
@@ -1347,7 +1353,6 @@ function calculateReconciliation() {
 
     const discCard = document.getElementById('card-discrepancy');
     const isWarning = totalCalcFee > totalExpectedFee + 0.005;
-    const isExceeded = totalCalcPercent > amexThresholdRateSetting;
 
     if (isAllZero) {
       netDiscrepancyDisplay.className = 'val-neutral';
@@ -1728,7 +1733,7 @@ function renderHistoryTable() {
           const calcFee = item.totalLedger - item.totalBank;
           const calcPercent = item.totalLedger > 0.005 ? ((calcFee / item.totalLedger) * 100) : 0;
           const expectedFee = item.totalLedger * (amexFeeRateSetting / 100);
-          if (calcPercent > amexThresholdRateSetting) return 'z-exceeded';
+          if (Math.abs(calcPercent) > amexThresholdRateSetting) return 'z-exceeded';
           if (calcFee > expectedFee + 0.005) return 'y-warning';
           return 'x-balanced';
         } else {
@@ -1846,10 +1851,13 @@ function renderHistoryTable() {
       const calcFee = r.totalLedger - r.totalBank;
       const calcPercent = r.totalLedger > 0.005 ? ((calcFee / r.totalLedger) * 100) : 0;
       const expectedFee = r.totalLedger * (amexFeeRateSetting / 100);
+      const isExceeded = Math.abs(calcPercent) > amexThresholdRateSetting;
 
       let statusText = '';
-      if (calcPercent > amexThresholdRateSetting) {
-        statusText = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25);"><i data-lucide="alert-circle"></i> Fee Exceeds Max</span>';
+      let feeClass = 'val-neutral';
+      if (isExceeded) {
+        feeClass = 'val-negative';
+        statusText = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25);"><i data-lucide="alert-circle"></i> Fee > 5%</span>';
       } else if (calcFee > expectedFee + 0.005) {
         statusText = '<span class="status-pill status-discrepant" style="background-color: rgba(245,158,11,0.1); color: var(--accent-yellow); border-color: rgba(245,158,11,0.25);"><i data-lucide="alert-triangle"></i> Fee Warning</span>';
       } else {
@@ -1861,7 +1869,7 @@ function renderHistoryTable() {
         <td>${r.bankDate}</td>
         <td class="num-col">${formatCurrency(r.totalLedger)}</td>
         <td class="num-col">${formatCurrency(r.totalBank)}</td>
-        <td class="num-col val-neutral">${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)</td>
+        <td class="num-col ${feeClass}">${formatCurrency(calcFee)} (${calcPercent.toFixed(2)}%)</td>
         <td class="num-col val-neutral">${formatCurrency(expectedFee)}</td>
         <td>${statusText}</td>
         <td style="font-size: 0.75rem; color: var(--text-secondary);">${timeStr}</td>
@@ -2053,8 +2061,8 @@ function exportCSV() {
       totalExpectedFeeSum += expectedFee;
 
       let status = 'Reconciled';
-      if (calcPercent > amexThresholdRateSetting) {
-        status = 'Fee Exceeds Max';
+      if (Math.abs(calcPercent) > amexThresholdRateSetting) {
+        status = 'Fee > 5%';
       } else if (calcFee > expectedFee + 0.005) {
         status = 'Fee Warning';
       }
@@ -2068,8 +2076,8 @@ function exportCSV() {
   } else {
     const totalCalcPercent = totalLedgerSum > 0.005 ? ((totalCalcFeeSum / totalLedgerSum) * 100) : 0;
     let rollUpStatus = 'Balanced';
-    if (totalCalcPercent > amexThresholdRateSetting) {
-      rollUpStatus = 'Out of Limit';
+    if (Math.abs(totalCalcPercent) > amexThresholdRateSetting) {
+      rollUpStatus = 'Fee > 5%';
     } else if (totalCalcFeeSum > totalExpectedFeeSum + 0.005) {
       rollUpStatus = 'Fee Warning';
     }
@@ -2161,8 +2169,8 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
       const expectedFee = r.ledger * (amexFeeRateSetting / 100);
       
       let statusText = 'Reconciled';
-      if (calcPercent > amexThresholdRateSetting) {
-        statusText = 'Fee Exceeds Max';
+      if (Math.abs(calcPercent) > amexThresholdRateSetting) {
+        statusText = 'Fee > 5%';
       } else if (calcFee > expectedFee + 0.005) {
         statusText = 'Fee Warning';
       }
@@ -2182,8 +2190,8 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
     const totalExpectedFee = result.totalLedger * (amexFeeRateSetting / 100);
     
     let rollUpStatus = 'Balanced';
-    if (totalCalcPercent > amexThresholdRateSetting) {
-      rollUpStatus = 'Out of Limit';
+    if (Math.abs(totalCalcPercent) > amexThresholdRateSetting) {
+      rollUpStatus = 'Fee > 5%';
     } else if (totalCalcFee > totalExpectedFee + 0.005) {
       rollUpStatus = 'Fee Warning';
     }
@@ -2229,7 +2237,7 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
         } else if (!isCards && data.column.index === 3) {
           const totalCalcFee = result.totalLedger - result.totalBank;
           const totalCalcPercent = result.totalLedger > 0.005 ? ((totalCalcFee / result.totalLedger) * 100) : 0;
-          if (totalCalcPercent > amexThresholdRateSetting) {
+          if (Math.abs(totalCalcPercent) > amexThresholdRateSetting) {
             data.cell.styles.textColor = [239, 68, 68];
           } else if (totalCalcFee > (result.totalLedger * (amexFeeRateSetting / 100)) + 0.005) {
             data.cell.styles.textColor = [245, 158, 11];
@@ -2245,7 +2253,7 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
           const calcFee = r.ledger - r.bank;
           const calcPercent = r.ledger > 0.005 ? ((calcFee / r.ledger) * 100) : 0;
           const expectedFee = r.ledger * (amexFeeRateSetting / 100);
-          if (calcPercent > amexThresholdRateSetting) {
+          if (Math.abs(calcPercent) > amexThresholdRateSetting) {
             data.cell.styles.textColor = [239, 68, 68];
           } else if (calcFee > expectedFee + 0.005) {
             data.cell.styles.textColor = [245, 158, 11];
@@ -2273,7 +2281,7 @@ function generateReconciliationPDF(tbDatesStr, bankDateStr, hotelCols, restCols,
   const netVal = isCards ? result.netDiscrepancy : (result.totalLedger - result.totalBank);
   const isBalanced = isCards 
     ? (Math.abs(result.netDiscrepancy) <= 0.005)
-    : ((result.totalLedger - result.totalBank) <= (result.totalLedger * (amexFeeRateSetting / 100)) + 0.005 && ((result.totalLedger - result.totalBank) / result.totalLedger * 100) <= amexThresholdRateSetting);
+    : ((result.totalLedger - result.totalBank) <= (result.totalLedger * (amexFeeRateSetting / 100)) + 0.005 && Math.abs((result.totalLedger - result.totalBank) / result.totalLedger * 100) <= amexThresholdRateSetting);
 
   if (isBalanced) {
     doc.setFillColor(209, 250, 229);
@@ -2499,8 +2507,8 @@ function exportReportToPDF(id) {
       const expectedFee = amexLedger * (amexFeeRateSetting / 100);
 
       let statusText = 'Reconciled';
-      if (calcPercent > amexThresholdRateSetting) {
-        statusText = 'Fee Exceeds Max';
+      if (Math.abs(calcPercent) > amexThresholdRateSetting) {
+        statusText = 'Fee > 5%';
       } else if (calcFee > expectedFee + 0.005) {
         statusText = 'Fee Warning';
       }
@@ -2522,8 +2530,8 @@ function exportReportToPDF(id) {
       const expectedFeeH = amexLedgerH * (amexFeeRateSetting / 100);
 
       let statusTextH = 'Reconciled';
-      if (calcPercentH > amexThresholdRateSetting) {
-        statusTextH = 'Fee Exceeds Max';
+      if (Math.abs(calcPercentH) > amexThresholdRateSetting) {
+        statusTextH = 'Fee > 5%';
       } else if (calcFeeH > expectedFeeH + 0.005) {
         statusTextH = 'Fee Warning';
       }
@@ -2545,8 +2553,8 @@ function exportReportToPDF(id) {
       const expectedFeeR = amexLedgerR * (amexFeeRateSetting / 100);
 
       let statusTextR = 'Reconciled';
-      if (calcPercentR > amexThresholdRateSetting) {
-        statusTextR = 'Fee Exceeds Max';
+      if (Math.abs(calcPercentR) > amexThresholdRateSetting) {
+        statusTextR = 'Fee > 5%';
       } else if (calcFeeR > expectedFeeR + 0.005) {
         statusTextR = 'Fee Warning';
       }
@@ -2566,8 +2574,8 @@ function exportReportToPDF(id) {
     const totalExpectedFee = report.totalLedger * (amexFeeRateSetting / 100);
 
     let rollUpStatus = 'Balanced';
-    if (totalCalcPercent > amexThresholdRateSetting) {
-      rollUpStatus = 'Out of Limit';
+    if (Math.abs(totalCalcPercent) > amexThresholdRateSetting) {
+      rollUpStatus = 'Fee > 5%';
     } else if (totalCalcFee > totalExpectedFee + 0.005) {
       rollUpStatus = 'Fee Warning';
     }
@@ -2613,7 +2621,7 @@ function exportReportToPDF(id) {
         } else if (!isCards && data.column.index === 3) {
           const totalCalcFee = report.totalLedger - report.totalBank;
           const totalCalcPercent = report.totalLedger > 0.005 ? ((totalCalcFee / report.totalLedger) * 100) : 0;
-          if (totalCalcPercent > amexThresholdRateSetting) {
+          if (Math.abs(totalCalcPercent) > amexThresholdRateSetting) {
             data.cell.styles.textColor = [239, 68, 68];
           } else if (totalCalcFee > (report.totalLedger * (amexFeeRateSetting / 100)) + 0.005) {
             data.cell.styles.textColor = [245, 158, 11];
@@ -2641,7 +2649,7 @@ function exportReportToPDF(id) {
   const netVal = isCards ? report.netDiscrepancy : (report.totalLedger - report.totalBank);
   const isBalanced = isCards 
     ? (Math.abs(report.netDiscrepancy) <= 0.005)
-    : ((report.totalLedger - report.totalBank) <= (report.totalLedger * (amexFeeRateSetting / 100)) + 0.005 && ((report.totalLedger - report.totalBank) / report.totalLedger * 100) <= amexThresholdRateSetting);
+    : ((report.totalLedger - report.totalBank) <= (report.totalLedger * (amexFeeRateSetting / 100)) + 0.005 && Math.abs((report.totalLedger - report.totalBank) / report.totalLedger * 100) <= amexThresholdRateSetting);
 
   if (isBalanced) {
     doc.setFillColor(209, 250, 229);
@@ -2735,8 +2743,8 @@ function downloadSummaryPDF() {
       totalExpectedFeeSum += expectedFee;
 
       let status = 'Reconciled';
-      if (calcPercent > amexThresholdRateSetting) {
-        status = 'Fee Exceeds Max';
+      if (Math.abs(calcPercent) > amexThresholdRateSetting) {
+        status = 'Fee > 5%';
       } else if (calcFee > expectedFee + 0.005) {
         status = 'Fee Warning';
       }
@@ -2765,8 +2773,8 @@ function downloadSummaryPDF() {
   } else {
     const totalCalcPercent = totalLedgerSum > 0.005 ? ((totalCalcFeeSum / totalLedgerSum) * 100) : 0;
     let rollUpStatus = 'Balanced';
-    if (totalCalcPercent > amexThresholdRateSetting) {
-      rollUpStatus = 'Out of Limit';
+    if (Math.abs(totalCalcPercent) > amexThresholdRateSetting) {
+      rollUpStatus = 'Fee > 5%';
     } else if (totalCalcFeeSum > totalExpectedFeeSum + 0.005) {
       rollUpStatus = 'Fee Warning';
     }
@@ -2812,7 +2820,7 @@ function downloadSummaryPDF() {
           if (totalNetDiff < -0.005) data.cell.styles.textColor = [239, 68, 68];
         } else if (!isCards && data.column.index === 4) {
           const totalCalcPercent = totalLedgerSum > 0.005 ? ((totalCalcFeeSum / totalLedgerSum) * 100) : 0;
-          if (totalCalcPercent > amexThresholdRateSetting) {
+          if (Math.abs(totalCalcPercent) > amexThresholdRateSetting) {
             data.cell.styles.textColor = [239, 68, 68];
           } else if (totalCalcFeeSum > totalExpectedFeeSum + 0.005) {
             data.cell.styles.textColor = [245, 158, 11];
