@@ -55,7 +55,7 @@ const companyFilters = {
   ws_hotels: { from: '', to: '', selectedRun: '' }
 };
 let amexFeeRateSetting = parseFloat(localStorage.getItem('amexFeeRate') || '3.5');
-let amexThresholdRateSetting = parseFloat(localStorage.getItem('amexThresholdRate') || '12.0');
+let amexThresholdRateSetting = parseFloat(localStorage.getItem('amexThresholdRate') || '5.0');
 
 // Separate Grid States
 let hotelColumns = []; // [{ date: 'YYYY-MM-DD', values: { visa_0: '', mc_0: ''... } }]
@@ -3268,10 +3268,10 @@ window.loadLiveStatusBoard = function() {
               isBalanced = !isExceeded && !isWarning && (calcFee >= -0.005);
 
               if (isExceeded) {
-                statusBadge = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25); padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="alert-circle" style="width: 8px; height: 8px;"></i> Out of Limit</span>';
+                statusBadge = '<span class="status-pill status-discrepant" style="background-color: rgba(239,68,68,0.1); color: var(--accent-red); border-color: rgba(239,68,68,0.25); padding: 1px 6px; font-size: 0.65rem;"><i data-lucide="alert-circle" style="width: 8px; height: 8px;"></i> Fee > 5%</span>';
                 discrepancyRightHtml = `
                   <div style="display: inline-flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 0.72rem; font-weight: 700; color: var(--accent-red); text-transform: uppercase;">(EXCEEDS MAX: ${formatCurrency(calcFee)} / ${calcPercent.toFixed(2)}%)</span>
+                    <span style="font-size: 0.72rem; font-weight: 700; color: var(--accent-red); text-transform: uppercase;">(FEE > 5%: ${formatCurrency(calcFee)} / ${calcPercent.toFixed(2)}%)</span>
                     <span style="font-size: 1.35rem; font-weight: 800;" class="val-negative">${formatCurrency(calcFee)}</span>
                   </div>
                 `;
